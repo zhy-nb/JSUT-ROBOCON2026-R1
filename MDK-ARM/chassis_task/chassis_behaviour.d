@@ -1,0 +1,10 @@
+chassis_task\chassis_behaviour.o: ..\application\chassis_behaviour.c
+chassis_task\chassis_behaviour.o: ..\application\chassis_behaviour.h
+chassis_task\chassis_behaviour.o: ..\application\struct_typedef.h
+chassis_task\chassis_behaviour.o: ..\application\chassis_task.h
+chassis_task\chassis_behaviour.o: ..\application\CAN_receive.h
+chassis_task\chassis_behaviour.o: ../components/controller/pid.h
+chassis_task\chassis_behaviour.o: ..\application\remote_control.h
+chassis_task\chassis_behaviour.o: ../bsp/boards/bsp_rc.h
+chassis_task\chassis_behaviour.o: ../components/algorithm/user_lib.h
+chassis_task\chassis_behaviour.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h

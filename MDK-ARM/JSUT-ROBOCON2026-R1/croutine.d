@@ -1,0 +1,14 @@
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/croutine.c
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
+jsut-robocon2026-r1\croutine.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h
+jsut-robocon2026-r1\croutine.o: D:\keil5\ARM\ARMCC\Bin\..\include\stdint.h
+jsut-robocon2026-r1\croutine.o: ../Inc/FreeRTOSConfig.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/portmacro.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/croutine.h
+jsut-robocon2026-r1\croutine.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
