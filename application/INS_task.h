@@ -108,4 +108,11 @@ extern const fp32 *get_accel_data_point(void);
   */
 extern const fp32 *get_mag_data_point(void);
 
+/**
+  * @brief  Get current BMI088 temperature.
+  *
+  * @retval Temperature in Celsius.
+  */
+extern fp32 get_imu_temperature(void);
+
 #endif

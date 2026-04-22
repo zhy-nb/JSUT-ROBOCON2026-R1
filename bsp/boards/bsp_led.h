@@ -1,3 +1,19 @@
+/**
+  *************************** Board RGB LED API Strategy *********************
+  * Interface:
+  *   - aRGB_led_show(0xaaRRGGBB) is the public low-level RGB LED API.
+  *
+  * Format:
+  *   - aa: brightness/alpha.
+  *   - RR: red channel.
+  *   - GG: green channel.
+  *   - BB: blue channel.
+  *
+  * Pattern owner:
+  *   - Blink and flow policies are owned by application tasks.
+  *   - This header only exposes the hardware output interface.
+  *************************** Board RGB LED API Strategy *********************
+  */
 #ifndef BSP_LED_H
 #define BSP_LED_H
 #include "struct_typedef.h"

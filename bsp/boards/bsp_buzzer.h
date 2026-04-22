@@ -1,3 +1,15 @@
+/**
+  *************************** Board Buzzer API Strategy **********************
+  * Interface:
+  *   - buzzer_on(psc, pwm): start PWM tone output on TIM4 CH3.
+  *   - buzzer_off(): stop tone output.
+  *
+  * Pattern owner:
+  *   - This header only exposes low-level buzzer control.
+  *   - Beep patterns are defined in application tasks.
+  *************************** Board Buzzer API Strategy **********************
+  */
+
 #ifndef BSP_BUZZER_H
 #define BSP_BUZZER_H
 #include "struct_typedef.h"

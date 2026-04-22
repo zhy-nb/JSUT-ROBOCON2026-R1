@@ -7,6 +7,26 @@
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
+/**
+  *************************** Calibration Buzzer Strategy *********************
+  * Purpose:
+  *   - Defines helper macros for calibration prompt tones.
+  *
+  * Tone mapping:
+  *   - imu_start_buzzer(): lower tone, used when the RC calibration gesture
+  *     starts and while gyro calibration is running.
+  *   - gimbal_start_buzzer(): higher tone, used after the middle point of the
+  *     RC gesture recognition window.
+  *   - cali_buzzer_off(): common mute helper.
+  *
+  * RC gesture prompt:
+  *   - Recognition window: CALIBRATE_END_TIME.
+  *   - Middle tone starts after RC_CALI_BUZZER_MIDDLE_TIME.
+  *   - Beep cycle: RCCALI_BUZZER_CYCLE_TIME, muted after
+  *     RC_CALI_BUZZER_PAUSE_TIME in each cycle.
+  *************************** Calibration Buzzer Strategy *********************
+  */
+
 #ifndef CALIBRATE_TASK_H
 #define CALIBRATE_TASK_H
 

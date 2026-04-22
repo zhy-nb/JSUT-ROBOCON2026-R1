@@ -558,6 +558,16 @@
               <FileType>1</FileType>
               <FilePath>..\application\chassis_task.c</FilePath>
             </File>
+            <File>
+              <FileName>oled_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\oled_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>power_monitor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\power_monitor.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -582,6 +592,11 @@
               <FileName>ist8310driver_middleware.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\components\devices\ist8310driver_middleware.c</FilePath>
+            </File>
+            <File>
+              <FileName>oled_ssd1306.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\components\devices\oled_ssd1306.c</FilePath>
             </File>
           </Files>
         </Group>

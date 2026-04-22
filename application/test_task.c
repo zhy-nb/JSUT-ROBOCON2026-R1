@@ -7,6 +7,51 @@
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
+/**
+  *************************** Status LED / Buzzer Strategy *******************
+  * Active task: test_task(), period 10 ms, starts after detect_task init.
+  *
+  * State source:
+  *   - RC online: DBUS_TOE has no error.
+  *   - Chassis motors online: CHASSIS_MOTOR1_TOE ~ CHASSIS_MOTOR4_TOE have no error.
+  *
+  * Display policy:
+  *   - RC OK + motors OK:
+  *       LED solid green; buzzer beeps once for 500 ms when entering this state.
+  *   - RC lost + motors lost:
+  *       LED solid red; buzzer keeps on.
+  *   - Motors OK + RC lost:
+  *       LED toggles red/green every 250 ms; buzzer is on 100 ms every 500 ms.
+  *   - RC OK + motors lost:
+  *       LED toggles red/off every 200 ms; buzzer is on 50 ms every 200 ms.
+  *
+  * Hardware output:
+  *   - LED uses aRGB_led_show(0xaaRRGGBB).
+  *   - Buzzer uses TIM4 CH3 PWM through buzzer_on(psc, pwm) / buzzer_off().
+  *
+  * 中文说明：
+  *   - 当前任务：test_task()，周期 10 ms，在 detect_task 初始化完成后开始运行。
+  *
+  * 状态来源：
+  *   - 遥控器在线：DBUS_TOE 无错误。
+  *   - 底盘电机在线：CHASSIS_MOTOR1_TOE ~ CHASSIS_MOTOR4_TOE 全部无错误。
+  *
+  * 显示策略：
+  *   - 遥控器和底盘电机均在线：
+  *       LED 常亮绿色；刚进入该状态时蜂鸣器鸣叫 500 ms。
+  *   - 遥控器和底盘电机均掉线：
+  *       LED 常亮红色；蜂鸣器持续鸣叫。
+  *   - 底盘电机在线，遥控器掉线：
+  *       LED 每 250 ms 红/绿切换；蜂鸣器每 500 ms 鸣叫 100 ms。
+  *   - 遥控器在线，底盘电机掉线：
+  *       LED 每 200 ms 红/灭切换；蜂鸣器每 200 ms 鸣叫 50 ms。
+  *
+  * 硬件输出：
+  *   - LED 通过 aRGB_led_show(0xaaRRGGBB) 输出。
+  *   - 蜂鸣器通过 TIM4 CH3 PWM，由 buzzer_on(psc, pwm) / buzzer_off() 控制。
+  *************************** Status LED / Buzzer Strategy *******************
+  */
+
 #include "test_task.h"
 #include "main.h"
 #include "cmsis_os.h"

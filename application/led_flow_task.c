@@ -6,6 +6,25 @@
   *             渐变流水显示效果。
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
+/**
+  *************************** RGB Flow LED Strategy **************************
+  * Purpose:
+  *   - Provides a standalone board RGB LED flow effect.
+  *   - This task only runs when led_RGB_flow_task() is created by FreeRTOS.
+  *
+  * Timing:
+  *   - Each adjacent color transition lasts RGB_FLOW_COLOR_CHANGE_TIME ms.
+  *   - The task updates LED PWM every 1 ms with linear interpolation.
+  *
+  * Color sequence:
+  *   - Bright blue -> dark green -> bright red -> dark blue.
+  *   - Bright green -> dark red -> bright blue, then repeat.
+  *
+  * Output:
+  *   - Color is packed as 0xaaRRGGBB and sent to aRGB_led_show().
+  *************************** RGB Flow LED Strategy **************************
+  */
+
 #include "led_flow_task.h"
 #include "bsp_led.h"
 #include "cmsis_os.h"
@@ -68,4 +87,3 @@ void led_RGB_flow_task(void const * argument)
         }
     }
 }
-

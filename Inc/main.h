@@ -81,6 +81,8 @@ void Error_Handler(void);
 #define CS1_GYRO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define ADC_BAT_Pin GPIO_PIN_10
+#define ADC_BAT_GPIO_Port GPIOF
 #define CLAW_2_Pin GPIO_PIN_14
 #define CLAW_2_GPIO_Port GPIOB
 #define CLAW_1_Pin GPIO_PIN_13

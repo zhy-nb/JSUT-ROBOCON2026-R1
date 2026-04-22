@@ -65,3 +65,4 @@ jsut-robocon2026-r1\main.o: ../bsp/boards/bsp_delay.h
 jsut-robocon2026-r1\main.o: ../application/remote_control.h
 jsut-robocon2026-r1\main.o: ../bsp/boards/bsp_rc.h
 jsut-robocon2026-r1\main.o: ../application/calibrate_task.h
+jsut-robocon2026-r1\main.o: ../application/power_monitor.h

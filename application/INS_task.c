@@ -391,6 +391,11 @@ extern const fp32 *get_mag_data_point(void)
     return INS_mag;
 }
 
+fp32 get_imu_temperature(void)
+{
+    return bmi088_real_data.temp;
+}
+
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {

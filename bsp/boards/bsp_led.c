@@ -1,3 +1,22 @@
+/**
+  *************************** Board RGB LED Strategy *************************
+  * Interface:
+  *   - aRGB_led_show(0xaaRRGGBB) is the only low-level RGB LED output API.
+  *
+  * Mapping:
+  *   - TIM5 CH1 drives blue.
+  *   - TIM5 CH2 drives green.
+  *   - TIM5 CH3 drives red.
+  *
+  * Brightness:
+  *   - The high byte aa is used as brightness/alpha.
+  *   - Each color channel is multiplied by aa before writing PWM compare.
+  *
+  * Policy:
+  *   - This BSP layer does not decide blink patterns.
+  *   - Higher-level tasks choose solid, toggle, or flow effects.
+  *************************** Board RGB LED Strategy *************************
+  */
 #include "bsp_led.h"
 #include "main.h"
 

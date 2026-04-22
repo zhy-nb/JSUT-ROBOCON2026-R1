@@ -30,6 +30,7 @@
 #include "chassis_task.h"
 #include "detect_task.h"
 #include "INS_task.h"
+#include "oled_task.h"
 
 /* USER CODE END Includes */
 
@@ -45,6 +46,7 @@
 osThreadId chassisTaskHandle;
 osThreadId detect_handle;
 osThreadId imuTaskHandle;
+osThreadId oledTaskHandle;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -151,6 +153,9 @@ void MX_FREERTOS_Init(void) {
   // INS 濮挎€佽В绠椾笌娓╂帶閾捐矾銆?
   osThreadDef(imuTask, INS_task, osPriorityRealtime, 0, 1024);
   imuTaskHandle = osThreadCreate(osThread(imuTask), NULL);
+
+  osThreadDef(oledTask, oled_task, osPriorityLow, 0, 256);
+  oledTaskHandle = osThreadCreate(osThread(oledTask), NULL);
 
   /* USER CODE END RTOS_THREADS */
 
