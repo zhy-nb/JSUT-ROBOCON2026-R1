@@ -1,9 +1,10 @@
 /**
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       chassis_task.h
-  * @brief      底盘控制任务参数与数据结构定义
-  * @note       集中定义底盘任务使用的控制参数、模式枚举和运行状态
-  *             结构，供控制层与行为层共享。
+  * @brief      Chassis control task parameters and shared state.
+  * @note       This header keeps the chassis control constants, mode enums,
+  *             and runtime state used by both the behaviour layer and the
+  *             control loop.
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 #ifndef CHASSIS_TASK_H
@@ -28,37 +29,27 @@
 #define CHASSIS_ANGLE_Z_RC_SEN 0.000002f
 #define CHASSIS_WZ_RC_SEN 0.01f
 
-/**
-  * @brief  开环模式下，摇杆值直接映射为电流的比例系数
-  */
+/* Open-loop mode directly maps RC input to current-like raw output. */
 #define CHASSIS_OPEN_RC_SCALE 10.0f
 
 #define CHASSIS_ACCEL_X_NUM 0.1666666667f
 #define CHASSIS_ACCEL_Y_NUM 0.3333333333f
 
-/**
-  * @brief  官方底盘通道死区宏，保留给兼容旧逻辑使用
-  */
+/* Kept for compatibility with the original RC logic. */
 #define CHASSIS_RC_DEADLINE 10
 
-/* ----------------------- RC Feel Parameters ----------------------------- */
-/**
-  * @brief  当前摇杆手感调节参数
-  *
-  * @note   调整这组宏可以改变起步手感、回中灵敏度和加减速平顺度，
-  *         但不会改变底盘控制链路本身。
-  */
-#define CHASSIS_RC_SLOW_SEN             0.80f
-#define CHASSIS_RC_DEADLINE_LOCAL       15
-#define CHASSIS_RC_EXPO                 0.30f
+/* ----------------------- RC Feel Parameters ------------------------------ */
+#define CHASSIS_RC_SLOW_SEN 0.80f
+#define CHASSIS_RC_DEADLINE_LOCAL 15
+#define CHASSIS_RC_EXPO 0.30f
 
-#define CHASSIS_VX_ACC_UP               1.8f
-#define CHASSIS_VX_ACC_DOWN             2.5f
-#define CHASSIS_VY_ACC_UP               2.0f
-#define CHASSIS_VY_ACC_DOWN             3.0f
+#define CHASSIS_VX_ACC_UP 1.8f
+#define CHASSIS_VX_ACC_DOWN 2.5f
+#define CHASSIS_VY_ACC_UP 2.0f
+#define CHASSIS_VY_ACC_DOWN 3.0f
 
-#define CHASSIS_WZ_ACC_UP               10.0f
-#define CHASSIS_WZ_ACC_DOWN             16.0f
+#define CHASSIS_WZ_ACC_UP 10.0f
+#define CHASSIS_WZ_ACC_DOWN 16.0f
 
 /* ----------------------- Kinematics ------------------------------------- */
 #define MOTOR_SPEED_TO_CHASSIS_SPEED_VX 0.25f
@@ -84,6 +75,15 @@
 
 #define CHASSIS_WZ_SET_SCALE 0.1f
 
+/* Runtime degradation policy:
+ * - RC lost: command target is reset to zero but the control loop stays alive.
+ * - 1 motor lost: chassis enters slow translational degraded mode.
+ * - 2 or more motors lost: chassis stops and waits for recovery.
+ */
+#define CHASSIS_DEGRADE_STOP_MOTOR_COUNT 2u
+#define CHASSIS_SINGLE_MOTOR_LOST_MOVE_SCALE 0.35f
+#define CHASSIS_SINGLE_MOTOR_LOST_WZ_SCALE 0.0f
+
 #define SWING_NO_MOVE_ANGLE 0.7f
 #define SWING_MOVE_ANGLE 0.31415926535897932384626433832795f
 
@@ -94,25 +94,17 @@
 #define M3505_MOTOR_SPEED_PID_MAX_OUT MAX_MOTOR_CAN_CURRENT
 #define M3505_MOTOR_SPEED_PID_MAX_IOUT 2000.0f
 
-#define CHASSIS_FOLLOW_GIMBAL_PID_KP 40.0f
-#define CHASSIS_FOLLOW_GIMBAL_PID_KI 0.0f
-#define CHASSIS_FOLLOW_GIMBAL_PID_KD 0.0f
-#define CHASSIS_FOLLOW_GIMBAL_PID_MAX_OUT 6.0f
-#define CHASSIS_FOLLOW_GIMBAL_PID_MAX_IOUT 0.2f
-
 /**
-  * @brief  底盘控制向量模式
+  * @brief  Chassis vector control modes used by the control loop.
   */
 typedef enum
 {
-    CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW,   // 跟随云台 yaw 相对角度
-    CHASSIS_VECTOR_FOLLOW_CHASSIS_YAW,  // 跟随底盘自身 yaw 角度
-    CHASSIS_VECTOR_NO_FOLLOW_YAW,       // 直接控制底盘自旋角速度
-    CHASSIS_VECTOR_RAW,                 // 直接输出原始电流
+    CHASSIS_VECTOR_DRIVE,
+    CHASSIS_VECTOR_RAW,
 } chassis_mode_e;
 
 /**
-  * @brief  单个底盘电机的控制与反馈状态
+  * @brief  Runtime state for a single chassis motor.
   */
 typedef struct
 {
@@ -124,10 +116,7 @@ typedef struct
 } chassis_motor_t;
 
 /**
-  * @brief  底盘控制任务使用的全量状态结构
-  *
-  * @note   这里同时保存底盘反馈、控制设定、滤波器状态和 PID 句柄，
-  *         便于在 2 ms 控制周期内完成“反馈更新 -> 设定生成 -> 电机输出”。
+  * @brief  Chassis control task shared runtime state.
   */
 typedef struct
 {
@@ -139,7 +128,6 @@ typedef struct
 
     chassis_motor_t motor_chassis[4];
     pid_type_def motor_speed_pid[4];
-    pid_type_def chassis_angle_pid;
 
     first_order_filter_type_t chassis_cmd_slow_set_vx;
     first_order_filter_type_t chassis_cmd_slow_set_vy;
@@ -153,10 +141,6 @@ typedef struct
     fp32 vy_set;
     fp32 wz_set;
 
-    fp32 chassis_relative_angle;
-    fp32 chassis_relative_angle_set;
-    fp32 chassis_yaw_set;
-
     fp32 vx_max_speed;
     fp32 vx_min_speed;
     fp32 vy_max_speed;
@@ -168,20 +152,18 @@ typedef struct
 } chassis_move_t;
 
 /**
-  * @brief  底盘控制任务，运行周期为 CHASSIS_CONTROL_TIME_MS
+  * @brief  Chassis control task entry.
   *
-  * @param[in] pvParameters 任务参数，未使用
+  * @param[in] pvParameters Task parameter, unused.
   */
 extern void chassis_task(void const *pvParameters);
 
 /**
-  * @brief  将遥控器平移通道映射为底盘速度设定值
+  * @brief  Convert RC translational channels into chassis velocity targets.
   *
-  * @param[out] vx_set   底盘前后方向速度设定
-  * @param[out] vy_set   底盘左右方向速度设定
-  * @param[in]  chassis_move_rc_to_vector  底盘控制状态结构
-  *
-  * @note   本函数内部完成摇杆死区、指数曲线与加减速限幅。
+  * @param[out] vx_set   Chassis X target in m/s.
+  * @param[out] vy_set   Chassis Y target in m/s.
+  * @param[in]  chassis_move_rc_to_vector Chassis runtime state.
   */
 extern void chassis_rc_to_control_vector(fp32 *vx_set,
                                          fp32 *vy_set,

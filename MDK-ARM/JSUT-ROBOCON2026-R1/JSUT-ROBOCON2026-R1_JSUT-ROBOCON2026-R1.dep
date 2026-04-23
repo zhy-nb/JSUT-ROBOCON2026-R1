@@ -1,7 +1,7 @@
 Dependencies for Project 'JSUT-ROBOCON2026-R1', Target 'JSUT-ROBOCON2026-R1': (DO NOT MODIFY !)
 CompilerVersion: 5060960::V5.06 update 7 (build 960)::ARMCC
 F (startup_stm32f407xx.s)(0x693187F1)(--cpu Cortex-M4.fp.sp -g --apcs=interwork -I ..\\Inc -I ../Drivers/CMSIS/Include-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include--pd "__UVISION_VERSION SETA 536" --pd "_RTE_ SETA 1" --pd "STM32F407xx SETA 1" --pd "_RTE_ SETA 1"--list startup_stm32f407xx.lst --xref -o jsut-robocon2026-r1\startup_stm32f407xx.o --depend jsut-robocon2026-r1\startup_stm32f407xx.d)
-F (../Src/main.c)(0x69E8BBD5)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\main.o --omf_browse jsut-robocon2026-r1\main.crf --depend jsut-robocon2026-r1\main.d)
+F (../Src/main.c)(0x69E8C3C1)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\main.o --omf_browse jsut-robocon2026-r1\main.crf --depend jsut-robocon2026-r1\main.d)
 I (../Inc/main.h)(0x69E8BBD1)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x67FFA456)
 I (../Inc/stm32f4xx_hal_conf.h)(0x69C90F53)
@@ -66,7 +66,7 @@ I (../application/struct_typedef.h)(0x61056806)
 I (../bsp/boards/bsp_delay.h)(0x61056806)
 I (../application/remote_control.h)(0x69E0C661)
 I (../bsp/boards/bsp_rc.h)(0x61056806)
-I (../application/calibrate_task.h)(0x69E0C661)
+I (../application/calibrate_task.h)(0x69E8BD14)
 I (../application/power_monitor.h)(0x69E8BBC1)
 F (../Src/gpio.c)(0x69DB43AA)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\gpio.o --omf_browse jsut-robocon2026-r1\gpio.crf --depend jsut-robocon2026-r1\gpio.d)
 I (../Inc/gpio.h)(0x69C90F51)
@@ -159,7 +159,7 @@ I (../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h)(0x67FFA441)
-I (../application/chassis_task.h)(0x69E0C661)
+I (../application/chassis_task.h)(0x69EA1A7F)
 I (../application/struct_typedef.h)(0x61056806)
 I (../application/CAN_receive.h)(0x69D3B56C)
 I (../components/controller/pid.h)(0x69E0C661)
@@ -565,8 +565,8 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x67FFA456)
-F (..\bsp\boards\bsp_buzzer.c)(0x61056806)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\bsp_buzzer.o --omf_browse jsut-robocon2026-r1\bsp_buzzer.crf --depend jsut-robocon2026-r1\bsp_buzzer.d)
-I (..\bsp\boards\bsp_buzzer.h)(0x61056806)
+F (..\bsp\boards\bsp_buzzer.c)(0x69E8BD29)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\bsp_buzzer.o --omf_browse jsut-robocon2026-r1\bsp_buzzer.crf --depend jsut-robocon2026-r1\bsp_buzzer.d)
+I (..\bsp\boards\bsp_buzzer.h)(0x69E8BD42)
 I (../application/struct_typedef.h)(0x61056806)
 I (../Inc/main.h)(0x69E8BBD1)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x67FFA456)
@@ -766,8 +766,8 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x67FFA456)
-F (..\bsp\boards\bsp_led.c)(0x61056806)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\bsp_led.o --omf_browse jsut-robocon2026-r1\bsp_led.crf --depend jsut-robocon2026-r1\bsp_led.d)
-I (..\bsp\boards\bsp_led.h)(0x61056806)
+F (..\bsp\boards\bsp_led.c)(0x69E8BD3D)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\bsp_led.o --omf_browse jsut-robocon2026-r1\bsp_led.crf --depend jsut-robocon2026-r1\bsp_led.d)
+I (..\bsp\boards\bsp_led.h)(0x69E8BD3D)
 I (../application/struct_typedef.h)(0x61056806)
 I (../Inc/main.h)(0x69E8BBD1)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x67FFA456)
@@ -887,7 +887,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x67FFA456)
 F (..\application\calibrate_task.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\calibrate_task.o --omf_browse jsut-robocon2026-r1\calibrate_task.crf --depend jsut-robocon2026-r1\calibrate_task.d)
-I (..\application\calibrate_task.h)(0x69E0C661)
+I (..\application\calibrate_task.h)(0x69E8BD14)
 I (..\application\struct_typedef.h)(0x61056806)
 I (D:\keil5\ARM\ARMCC\include\string.h)(0x6025237E)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h)(0x67FFA441)
@@ -906,7 +906,7 @@ I (../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h)(0x67FFA441)
-I (../bsp/boards/bsp_buzzer.h)(0x61056806)
+I (../bsp/boards/bsp_buzzer.h)(0x69E8BD42)
 I (../bsp/boards/bsp_flash.h)(0x61056806)
 I (..\application\can_receive.h)(0x69D3B56C)
 I (..\application\remote_control.h)(0x69E0C661)
@@ -967,7 +967,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x67FFA456)
 I (..\application\detect_task.h)(0x69E0C661)
-F (..\application\detect_task.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\detect_task.o --omf_browse jsut-robocon2026-r1\detect_task.crf --depend jsut-robocon2026-r1\detect_task.d)
+F (..\application\detect_task.c)(0x69EA1638)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\detect_task.o --omf_browse jsut-robocon2026-r1\detect_task.crf --depend jsut-robocon2026-r1\detect_task.d)
 I (..\application\detect_task.h)(0x69E0C661)
 I (..\application\struct_typedef.h)(0x61056806)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h)(0x67FFA441)
@@ -1047,12 +1047,12 @@ I (../components/devices/ist8310driver.h)(0x69E0C661)
 I (../components/controller/pid.h)(0x69E0C661)
 I (../components/algorithm/ahrs.h)(0x61056806)
 I (../components/algorithm/AHRS_MiddleWare.h)(0x69E0C661)
-I (..\application\calibrate_task.h)(0x69E0C661)
+I (..\application\calibrate_task.h)(0x69E8BD14)
 I (..\application\detect_task.h)(0x69E0C661)
-F (..\application\led_flow_task.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\led_flow_task.o --omf_browse jsut-robocon2026-r1\led_flow_task.crf --depend jsut-robocon2026-r1\led_flow_task.d)
+F (..\application\led_flow_task.c)(0x69E8BD23)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\led_flow_task.o --omf_browse jsut-robocon2026-r1\led_flow_task.crf --depend jsut-robocon2026-r1\led_flow_task.d)
 I (..\application\led_flow_task.h)(0x69E0C661)
 I (..\application\struct_typedef.h)(0x61056806)
-I (../bsp/boards/bsp_led.h)(0x61056806)
+I (../bsp/boards/bsp_led.h)(0x69E8BD3D)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x67FFA441)
 I (D:\keil5\ARM\ARMCC\include\stddef.h)(0x6025237E)
@@ -1146,7 +1146,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x67FFA456)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x67FFA456)
 I (..\application\detect_task.h)(0x69E0C661)
-F (..\application\test_task.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\test_task.o --omf_browse jsut-robocon2026-r1\test_task.crf --depend jsut-robocon2026-r1\test_task.d)
+F (..\application\test_task.c)(0x69E8BFFC)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\test_task.o --omf_browse jsut-robocon2026-r1\test_task.crf --depend jsut-robocon2026-r1\test_task.d)
 I (..\application\test_task.h)(0x69E0C661)
 I (..\application\struct_typedef.h)(0x61056806)
 I (../Inc/main.h)(0x69E8BBD1)
@@ -1200,28 +1200,29 @@ I (../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h)(0x67FFA441)
-I (../bsp/boards/bsp_buzzer.h)(0x61056806)
-I (../bsp/boards/bsp_led.h)(0x61056806)
+I (../bsp/boards/bsp_buzzer.h)(0x69E8BD42)
+I (../bsp/boards/bsp_led.h)(0x69E8BD3D)
 I (..\application\detect_task.h)(0x69E0C661)
-F (..\application\chassis_behaviour.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\chassis_behaviour.o --omf_browse jsut-robocon2026-r1\chassis_behaviour.crf --depend jsut-robocon2026-r1\chassis_behaviour.d)
-I (..\application\chassis_behaviour.h)(0x69E0C661)
+F (..\application\chassis_behaviour.c)(0x69EA1A7F)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\chassis_behaviour.o --omf_browse jsut-robocon2026-r1\chassis_behaviour.crf --depend jsut-robocon2026-r1\chassis_behaviour.d)
+I (..\application\chassis_behaviour.h)(0x69EA1A7F)
 I (..\application\struct_typedef.h)(0x61056806)
-I (..\application\chassis_task.h)(0x69E0C661)
+I (..\application\chassis_task.h)(0x69EA1A7F)
 I (..\application\CAN_receive.h)(0x69D3B56C)
 I (../components/controller/pid.h)(0x69E0C661)
 I (..\application\remote_control.h)(0x69E0C661)
 I (../bsp/boards/bsp_rc.h)(0x61056806)
 I (../components/algorithm/user_lib.h)(0x61056806)
+I (..\application\detect_task.h)(0x69E0C661)
 I (D:\keil5\ARM\ARMCC\include\stddef.h)(0x6025237E)
-F (..\application\chassis_task.c)(0x69E0C661)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\chassis_task.o --omf_browse jsut-robocon2026-r1\chassis_task.crf --depend jsut-robocon2026-r1\chassis_task.d)
-I (..\application\chassis_task.h)(0x69E0C661)
+F (..\application\chassis_task.c)(0x69EA1A7F)(--c99 -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include -I ../bsp/boards -I ../application -I ../components/algorithm -I ../components/algorithm/Include -I ../components/controller -I ../components/devices-I.\RTE\_JSUT-ROBOCON2026-R1-ID:\keil5\ARM\PACK\ARM\CMSIS\5.8.0\CMSIS\Core\Include-D__UVISION_VERSION="536" -D_RTE_ -DSTM32F407xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F407xx -DUSE_HAL_DRIVER -DSTM32F407xx -DARM_MATH_CM4 -D__FPU_USED="1U" -D__FPU_PRESENT="1U" -D__CC_ARM -DARM_MATH_MATRIX_CHECK -DARM_MATH_ROUNDING-o jsut-robocon2026-r1\chassis_task.o --omf_browse jsut-robocon2026-r1\chassis_task.crf --depend jsut-robocon2026-r1\chassis_task.d)
+I (..\application\chassis_task.h)(0x69EA1A7F)
 I (..\application\struct_typedef.h)(0x61056806)
 I (..\application\CAN_receive.h)(0x69D3B56C)
 I (../components/controller/pid.h)(0x69E0C661)
 I (..\application\remote_control.h)(0x69E0C661)
 I (../bsp/boards/bsp_rc.h)(0x61056806)
 I (../components/algorithm/user_lib.h)(0x61056806)
-I (..\application\chassis_behaviour.h)(0x69E0C661)
+I (..\application\chassis_behaviour.h)(0x69EA1A7F)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h)(0x67FFA441)
 I (../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h)(0x67FFA441)
 I (D:\keil5\ARM\ARMCC\include\stddef.h)(0x6025237E)

@@ -20,7 +20,10 @@ static int16_t chassis_apply_deadband(int16_t input, int16_t deadband);
 static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo);
 static fp32 chassis_slew_limit(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt);
 static uint8_t chassis_startup_blocked(void);
-static uint8_t chassis_all_motors_lost(void);
+static uint8_t chassis_motor_is_lost(uint8_t motor_index);
+static uint8_t chassis_lost_motor_count(void);
+static void chassis_reset_motion_command(chassis_move_t *chassis_move_control);
+static void chassis_apply_fault_strategy(chassis_move_t *chassis_move_control);
 static void chassis_send_motor_current(const chassis_move_t *chassis_move_send);
 
 static void chassis_init(chassis_move_t *chassis_move_init);
@@ -30,6 +33,13 @@ static void chassis_feedback_update(chassis_move_t *chassis_move_update);
 static void chassis_set_control(chassis_move_t *chassis_move_control);
 static void chassis_control_loop(chassis_move_t *chassis_move_control_loop);
 static void chassis_vector_to_mecanum_wheel_speed(fp32 vx_set, fp32 vy_set, fp32 wz_set, fp32 wheel_speed[4]);
+
+static const uint8_t chassis_motor_toe[4] = {
+    CHASSIS_MOTOR1_TOE,
+    CHASSIS_MOTOR2_TOE,
+    CHASSIS_MOTOR3_TOE,
+    CHASSIS_MOTOR4_TOE,
+};
 
 static int16_t chassis_apply_deadband(int16_t input, int16_t deadband)
 {
@@ -89,39 +99,101 @@ static fp32 chassis_slew_limit(fp32 target, fp32 current, fp32 acc_up, fp32 acc_
 
 static uint8_t chassis_startup_blocked(void)
 {
-    return (uint8_t)(toe_is_error(CHASSIS_MOTOR1_TOE) ||
+    return (uint8_t)(!detect_task_is_inited() ||
+                     toe_is_error(CHASSIS_MOTOR1_TOE) ||
                      toe_is_error(CHASSIS_MOTOR2_TOE) ||
                      toe_is_error(CHASSIS_MOTOR3_TOE) ||
                      toe_is_error(CHASSIS_MOTOR4_TOE) ||
                      toe_is_error(DBUS_TOE));
 }
 
-static uint8_t chassis_all_motors_lost(void)
+static uint8_t chassis_motor_is_lost(uint8_t motor_index)
 {
-    return (uint8_t)(toe_is_error(CHASSIS_MOTOR1_TOE) &&
-                     toe_is_error(CHASSIS_MOTOR2_TOE) &&
-                     toe_is_error(CHASSIS_MOTOR3_TOE) &&
-                     toe_is_error(CHASSIS_MOTOR4_TOE));
+    if (motor_index >= 4U)
+    {
+        return 1U;
+    }
+
+    return (uint8_t)toe_is_error(chassis_motor_toe[motor_index]);
 }
 
-static void chassis_send_motor_current(const chassis_move_t *chassis_move_send)
+static uint8_t chassis_lost_motor_count(void)
 {
-    if (chassis_move_send == NULL || chassis_all_motors_lost())
+    uint8_t count = 0U;
+    uint8_t i = 0U;
+
+    for (i = 0U; i < 4U; i++)
+    {
+        if (chassis_motor_is_lost(i))
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+static void chassis_reset_motion_command(chassis_move_t *chassis_move_control)
+{
+    if (chassis_move_control == NULL)
     {
         return;
     }
 
-    if (toe_is_error(DBUS_TOE))
+    chassis_move_control->vx_set = 0.0f;
+    chassis_move_control->vy_set = 0.0f;
+    chassis_move_control->wz_set = 0.0f;
+
+    chassis_move_control->chassis_cmd_slow_set_vx.out = 0.0f;
+    chassis_move_control->chassis_cmd_slow_set_vy.out = 0.0f;
+    chassis_move_control->chassis_cmd_slow_set_wz.out = 0.0f;
+
+}
+
+static void chassis_apply_fault_strategy(chassis_move_t *chassis_move_control)
+{
+    uint8_t lost_motor_count = 0U;
+
+    if (chassis_move_control == NULL)
     {
-        CAN_cmd_chassis(0, 0, 0, 0);
+        return;
     }
-    else
+
+    lost_motor_count = chassis_lost_motor_count();
+
+    if (toe_is_error(DBUS_TOE) || lost_motor_count >= CHASSIS_DEGRADE_STOP_MOTOR_COUNT)
     {
-        CAN_cmd_chassis(chassis_move_send->motor_chassis[0].give_current,
-                        chassis_move_send->motor_chassis[1].give_current,
-                        chassis_move_send->motor_chassis[2].give_current,
-                        chassis_move_send->motor_chassis[3].give_current);
+        chassis_reset_motion_command(chassis_move_control);
+        return;
     }
+
+    if (lost_motor_count == 1U)
+    {
+        chassis_move_control->vx_set *= CHASSIS_SINGLE_MOTOR_LOST_MOVE_SCALE;
+        chassis_move_control->vy_set *= CHASSIS_SINGLE_MOTOR_LOST_MOVE_SCALE;
+        chassis_move_control->wz_set *= CHASSIS_SINGLE_MOTOR_LOST_WZ_SCALE;
+    }
+}
+
+static void chassis_send_motor_current(const chassis_move_t *chassis_move_send)
+{
+    int16_t give_current[4] = {0, 0, 0, 0};
+    uint8_t i = 0U;
+
+    if (chassis_move_send == NULL)
+    {
+        return;
+    }
+
+    for (i = 0U; i < 4U; i++)
+    {
+        if (!chassis_motor_is_lost(i))
+        {
+            give_current[i] = chassis_move_send->motor_chassis[i].give_current;
+        }
+    }
+
+    CAN_cmd_chassis(give_current[0], give_current[1], give_current[2], give_current[3]);
 }
 
 #if INCLUDE_uxTaskGetStackHighWaterMark
@@ -175,11 +247,6 @@ static void chassis_init(chassis_move_t *chassis_move_init)
         M3505_MOTOR_SPEED_PID_KI,
         M3505_MOTOR_SPEED_PID_KD,
     };
-    static const fp32 chassis_yaw_pid[3] = {
-        CHASSIS_FOLLOW_GIMBAL_PID_KP,
-        CHASSIS_FOLLOW_GIMBAL_PID_KI,
-        CHASSIS_FOLLOW_GIMBAL_PID_KD,
-    };
     static const fp32 chassis_x_order_filter[1] = {CHASSIS_ACCEL_X_NUM};
     static const fp32 chassis_y_order_filter[1] = {CHASSIS_ACCEL_Y_NUM};
     uint8_t i = 0;
@@ -202,12 +269,6 @@ static void chassis_init(chassis_move_t *chassis_move_init)
                  M3505_MOTOR_SPEED_PID_MAX_OUT,
                  M3505_MOTOR_SPEED_PID_MAX_IOUT);
     }
-
-    PID_init(&chassis_move_init->chassis_angle_pid,
-             PID_POSITION,
-             chassis_yaw_pid,
-             CHASSIS_FOLLOW_GIMBAL_PID_MAX_OUT,
-             CHASSIS_FOLLOW_GIMBAL_PID_MAX_IOUT);
 
     first_order_filter_init(&chassis_move_init->chassis_cmd_slow_set_vx,
                             CHASSIS_CONTROL_TIME,
@@ -256,22 +317,6 @@ static void chassis_mode_change_control_transit(chassis_move_t *chassis_move_tra
     if (chassis_move_transit->last_chassis_mode == chassis_move_transit->chassis_mode)
     {
         return;
-    }
-
-    if ((chassis_move_transit->last_chassis_mode != CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW) &&
-        chassis_move_transit->chassis_mode == CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW)
-    {
-        chassis_move_transit->chassis_relative_angle_set = 0.0f;
-    }
-    else if ((chassis_move_transit->last_chassis_mode != CHASSIS_VECTOR_FOLLOW_CHASSIS_YAW) &&
-             chassis_move_transit->chassis_mode == CHASSIS_VECTOR_FOLLOW_CHASSIS_YAW)
-    {
-        chassis_move_transit->chassis_yaw_set = chassis_move_transit->chassis_yaw;
-    }
-    else if ((chassis_move_transit->last_chassis_mode != CHASSIS_VECTOR_NO_FOLLOW_YAW) &&
-             chassis_move_transit->chassis_mode == CHASSIS_VECTOR_NO_FOLLOW_YAW)
-    {
-        chassis_move_transit->chassis_yaw_set = chassis_move_transit->chassis_yaw;
     }
 
     chassis_move_transit->last_chassis_mode = chassis_move_transit->chassis_mode;
@@ -382,33 +427,7 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
 
     chassis_behaviour_control_set(&vx_set, &vy_set, &angle_set, chassis_move_control);
 
-    if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW)
-    {
-        chassis_move_control->vx_set = vx_set;
-        chassis_move_control->vy_set = vy_set;
-        chassis_move_control->chassis_relative_angle_set = rad_format(angle_set);
-        chassis_move_control->vx_set = fp32_constrain(chassis_move_control->vx_set,
-                                                      chassis_move_control->vx_min_speed,
-                                                      chassis_move_control->vx_max_speed);
-        chassis_move_control->vy_set = fp32_constrain(chassis_move_control->vy_set,
-                                                      chassis_move_control->vy_min_speed,
-                                                      chassis_move_control->vy_max_speed);
-    }
-    else if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_FOLLOW_CHASSIS_YAW)
-    {
-        fp32 delta_angle = 0.0f;
-
-        chassis_move_control->chassis_yaw_set = rad_format(angle_set);
-        delta_angle = rad_format(chassis_move_control->chassis_yaw_set - chassis_move_control->chassis_yaw);
-        chassis_move_control->wz_set = PID_calc(&chassis_move_control->chassis_angle_pid, 0.0f, delta_angle);
-        chassis_move_control->vx_set = fp32_constrain(vx_set,
-                                                      chassis_move_control->vx_min_speed,
-                                                      chassis_move_control->vx_max_speed);
-        chassis_move_control->vy_set = fp32_constrain(vy_set,
-                                                      chassis_move_control->vy_min_speed,
-                                                      chassis_move_control->vy_max_speed);
-    }
-    else if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_NO_FOLLOW_YAW)
+    if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_DRIVE)
     {
         chassis_move_control->wz_set = angle_set;
         chassis_move_control->vx_set = fp32_constrain(vx_set,
@@ -427,6 +446,8 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
         chassis_move_control->chassis_cmd_slow_set_vy.out = 0.0f;
         chassis_move_control->chassis_cmd_slow_set_wz.out = 0.0f;
     }
+
+    chassis_apply_fault_strategy(chassis_move_control);
 }
 
 /**
@@ -466,7 +487,14 @@ static void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
     {
         for (i = 0; i < 4; i++)
         {
-            chassis_move_control_loop->motor_chassis[i].give_current = (int16_t)(wheel_speed[i]);
+            if (chassis_motor_is_lost(i))
+            {
+                chassis_move_control_loop->motor_chassis[i].give_current = 0;
+            }
+            else
+            {
+                chassis_move_control_loop->motor_chassis[i].give_current = (int16_t)(wheel_speed[i]);
+            }
         }
         return;
     }
@@ -474,6 +502,12 @@ static void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
     // 若任一轮目标速度超限，则按比例整体缩放，保持期望运动方向不变。
     for (i = 0; i < 4; i++)
     {
+        if (chassis_motor_is_lost(i))
+        {
+            chassis_move_control_loop->motor_chassis[i].speed_set = 0.0f;
+            continue;
+        }
+
         chassis_move_control_loop->motor_chassis[i].speed_set = wheel_speed[i];
         temp = fabsf(chassis_move_control_loop->motor_chassis[i].speed_set);
         if (max_vector < temp)
@@ -487,12 +521,21 @@ static void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
         vector_rate = MAX_WHEEL_SPEED / max_vector;
         for (i = 0; i < 4; i++)
         {
-            chassis_move_control_loop->motor_chassis[i].speed_set *= vector_rate;
+            if (!chassis_motor_is_lost(i))
+            {
+                chassis_move_control_loop->motor_chassis[i].speed_set *= vector_rate;
+            }
         }
     }
 
     for (i = 0; i < 4; i++)
     {
+        if (chassis_motor_is_lost(i))
+        {
+            PID_clear(&chassis_move_control_loop->motor_speed_pid[i]);
+            continue;
+        }
+
         PID_calc(&chassis_move_control_loop->motor_speed_pid[i],
                  chassis_move_control_loop->motor_chassis[i].speed,
                  chassis_move_control_loop->motor_chassis[i].speed_set);
@@ -500,7 +543,14 @@ static void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
 
     for (i = 0; i < 4; i++)
     {
-        chassis_move_control_loop->motor_chassis[i].give_current =
-            (int16_t)(chassis_move_control_loop->motor_speed_pid[i].out);
+        if (chassis_motor_is_lost(i))
+        {
+            chassis_move_control_loop->motor_chassis[i].give_current = 0;
+        }
+        else
+        {
+            chassis_move_control_loop->motor_chassis[i].give_current =
+                (int16_t)(chassis_move_control_loop->motor_speed_pid[i].out);
+        }
     }
 }

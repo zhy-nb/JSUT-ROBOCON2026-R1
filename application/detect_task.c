@@ -98,14 +98,25 @@ void detect_task(void const *pvParameters)
             {
                 error_list[i].is_lost = 0;
 
-                // 数据异常判断由各设备自行提供检测函数。
-                if (error_list[i].data_is_error != NULL)
+                // 数据异常与“是否提供检测函数”分开处理：
+                // 这里只读取 detect_hook() 刷新的异常标志，不再把函数指针本身当成异常。
+                if (error_list[i].data_is_error_fun != NULL)
                 {
-                    error_list[i].error_exist = 1;
+                    error_list[i].error_exist = error_list[i].data_is_error;
                 }
                 else
                 {
                     error_list[i].error_exist = 0;
+                }
+
+                if (error_list[i].error_exist)
+                {
+                    if (error_list[i].priority > error_list[error_num_display].priority)
+                    {
+                        error_num_display = i;
+                    }
+
+                    error_list[ERROR_LIST_LENGHT].error_exist = 1;
                 }
 
                 // 根据最近两次时间戳估算设备数据更新频率。

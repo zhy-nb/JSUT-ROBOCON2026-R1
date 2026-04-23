@@ -1,19 +1,23 @@
 /**
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       chassis_behaviour.c
-  * @brief      底盘行为层实现
-  * @note       将遥控输入转换为不同控制模式下的速度、角度或角速度
-  *             目标量，供底盘控制任务进一步处理。
+  * @brief      Chassis behaviour-layer implementation.
+  * @note       This layer judges the current chassis mode automatically from
+  *             fault state and converts it into target vectors.
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
 #include "chassis_behaviour.h"
+#include "detect_task.h"
 
 #include <stddef.h>
 
+static uint8_t chassis_behaviour_lost_motor_count(void);
+static chassis_behaviour_e chassis_behaviour_get_auto_mode(void);
+
 static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo);
 static fp32 chassis_slew_limit_local(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt);
-static fp32 chassis_no_follow_yaw_get_wz_set(chassis_move_t *chassis_move_rc_to_vector);
+static fp32 chassis_drive_get_wz_set(chassis_move_t *chassis_move_rc_to_vector);
 
 static void chassis_zero_force_control(fp32 *vx_set,
                                        fp32 *vy_set,
@@ -23,42 +27,57 @@ static void chassis_no_move_control(fp32 *vx_set,
                                     fp32 *vy_set,
                                     fp32 *wz_set,
                                     chassis_move_t *chassis_move_rc_to_vector);
-static void chassis_infantry_follow_gimbal_yaw_control(fp32 *vx_set,
-                                                       fp32 *vy_set,
-                                                       fp32 *angle_set,
-                                                       chassis_move_t *chassis_move_rc_to_vector);
-static void chassis_engineer_follow_chassis_yaw_control(fp32 *vx_set,
-                                                        fp32 *vy_set,
-                                                        fp32 *angle_set,
-                                                        chassis_move_t *chassis_move_rc_to_vector);
-static void chassis_no_follow_yaw_control(fp32 *vx_set,
-                                          fp32 *vy_set,
-                                          fp32 *wz_set,
-                                          chassis_move_t *chassis_move_rc_to_vector);
-static void chassis_open_set_control(fp32 *vx_set,
-                                     fp32 *vy_set,
-                                     fp32 *wz_set,
-                                     chassis_move_t *chassis_move_rc_to_vector);
+static void chassis_drive_control(fp32 *vx_set,
+                                  fp32 *vy_set,
+                                  fp32 *wz_set,
+                                  chassis_move_t *chassis_move_rc_to_vector);
 
-/**
-  * @brief  当前行为层模式
-  *
-  * @note   当前逻辑
-
- 在 `chassis_behaviour_mode_set()` 中固定选择
-  *         `CHASSIS_NO_FOLLOW_YAW`，但其余模式接口仍保留，以兼容
-  *         官方底盘行为层组织方式。
-  */
 static chassis_behaviour_e chassis_behaviour_mode = CHASSIS_ZERO_FORCE;
 
-/**
-  * @brief  对摇杆输入施加死区与指数曲线
-  *
-  * @param[in] input    原始遥控器通道值
-  * @param[in] deadband 摇杆死区
-  * @param[in] expo     指数曲线系数
-  * @retval 归一化后的控制量，范围约为 [-1.0, 1.0]
-  */
+static uint8_t chassis_behaviour_lost_motor_count(void)
+{
+    uint8_t count = 0U;
+
+    if (toe_is_error(CHASSIS_MOTOR1_TOE))
+    {
+        count++;
+    }
+    if (toe_is_error(CHASSIS_MOTOR2_TOE))
+    {
+        count++;
+    }
+    if (toe_is_error(CHASSIS_MOTOR3_TOE))
+    {
+        count++;
+    }
+    if (toe_is_error(CHASSIS_MOTOR4_TOE))
+    {
+        count++;
+    }
+
+    return count;
+}
+
+static chassis_behaviour_e chassis_behaviour_get_auto_mode(void)
+{
+    if (!detect_task_is_inited())
+    {
+        return CHASSIS_ZERO_FORCE;
+    }
+
+    if (toe_is_error(DBUS_TOE))
+    {
+        return CHASSIS_NO_MOVE;
+    }
+
+    if (chassis_behaviour_lost_motor_count() >= CHASSIS_DEGRADE_STOP_MOTOR_COUNT)
+    {
+        return CHASSIS_NO_MOVE;
+    }
+
+    return CHASSIS_DRIVE;
+}
+
 static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo)
 {
     int16_t channel = input;
@@ -80,9 +99,6 @@ static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo)
     return fp32_constrain(output, -1.0f, 1.0f);
 }
 
-/**
-  * @brief  对目标值施加加减速限幅
-  */
 static fp32 chassis_slew_limit_local(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt)
 {
     fp32 delta = target - current;
@@ -115,32 +131,15 @@ void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode)
         return;
     }
 
-    // 当前比赛底盘默认工作在“不跟随角度”的速度控制模式。
-    chassis_behaviour_mode = CHASSIS_NO_FOLLOW_YAW;
+    chassis_behaviour_mode = chassis_behaviour_get_auto_mode();
 
     if (chassis_behaviour_mode == CHASSIS_ZERO_FORCE)
     {
         chassis_move_mode->chassis_mode = CHASSIS_VECTOR_RAW;
     }
-    else if (chassis_behaviour_mode == CHASSIS_NO_MOVE)
+    else
     {
-        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_NO_FOLLOW_YAW;
-    }
-    else if (chassis_behaviour_mode == CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW)
-    {
-        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_FOLLOW_GIMBAL_YAW;
-    }
-    else if (chassis_behaviour_mode == CHASSIS_ENGINEER_FOLLOW_CHASSIS_YAW)
-    {
-        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_FOLLOW_CHASSIS_YAW;
-    }
-    else if (chassis_behaviour_mode == CHASSIS_NO_FOLLOW_YAW)
-    {
-        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_NO_FOLLOW_YAW;
-    }
-    else if (chassis_behaviour_mode == CHASSIS_OPEN)
-    {
-        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_RAW;
+        chassis_move_mode->chassis_mode = CHASSIS_VECTOR_DRIVE;
     }
 }
 
@@ -162,21 +161,9 @@ void chassis_behaviour_control_set(fp32 *vx_set,
     {
         chassis_no_move_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
     }
-    else if (chassis_behaviour_mode == CHASSIS_INFANTRY_FOLLOW_GIMBAL_YAW)
+    else
     {
-        chassis_infantry_follow_gimbal_yaw_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
-    }
-    else if (chassis_behaviour_mode == CHASSIS_ENGINEER_FOLLOW_CHASSIS_YAW)
-    {
-        chassis_engineer_follow_chassis_yaw_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
-    }
-    else if (chassis_behaviour_mode == CHASSIS_NO_FOLLOW_YAW)
-    {
-        chassis_no_follow_yaw_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
-    }
-    else if (chassis_behaviour_mode == CHASSIS_OPEN)
-    {
-        chassis_open_set_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
+        chassis_drive_control(vx_set, vy_set, angle_set, chassis_move_rc_to_vector);
     }
 }
 
@@ -214,68 +201,22 @@ static void chassis_no_move_control(fp32 *vx_set,
     *wz_set = 0.0f;
 }
 
-static void chassis_infantry_follow_gimbal_yaw_control(fp32 *vx_set,
-                                                       fp32 *vy_set,
-                                                       fp32 *angle_set,
-                                                       chassis_move_t *chassis_move_rc_to_vector)
-{
-    if (vx_set == NULL || vy_set == NULL || angle_set == NULL || chassis_move_rc_to_vector == NULL)
-    {
-        return;
-    }
-
-    chassis_rc_to_control_vector(vx_set, vy_set, chassis_move_rc_to_vector);
-    *angle_set = 0.0f;
-}
-
-static void chassis_engineer_follow_chassis_yaw_control(fp32 *vx_set,
-                                                        fp32 *vy_set,
-                                                        fp32 *angle_set,
-                                                        chassis_move_t *chassis_move_rc_to_vector)
-{
-    if (vx_set == NULL || vy_set == NULL || angle_set == NULL || chassis_move_rc_to_vector == NULL)
-    {
-        return;
-    }
-
-    chassis_rc_to_control_vector(vx_set, vy_set, chassis_move_rc_to_vector);
-    *angle_set = 0.0f;
-}
-
-static void chassis_no_follow_yaw_control(fp32 *vx_set,
-                                          fp32 *vy_set,
-                                          fp32 *wz_set,
-                                          chassis_move_t *chassis_move_rc_to_vector)
+static void chassis_drive_control(fp32 *vx_set,
+                                  fp32 *vy_set,
+                                  fp32 *wz_set,
+                                  chassis_move_t *chassis_move_rc_to_vector)
 {
     if (vx_set == NULL || vy_set == NULL || wz_set == NULL || chassis_move_rc_to_vector == NULL)
     {
         return;
     }
 
-    // 平移由 chassis_task 内的通用摇杆映射函数处理。
     chassis_rc_to_control_vector(vx_set, vy_set, chassis_move_rc_to_vector);
     *vx_set = -*vx_set;
-
-    // 自旋沿用与平移一致的死区、指数和斜坡限制策略。
-    *wz_set = chassis_no_follow_yaw_get_wz_set(chassis_move_rc_to_vector);
+    *wz_set = chassis_drive_get_wz_set(chassis_move_rc_to_vector);
 }
 
-static void chassis_open_set_control(fp32 *vx_set,
-                                     fp32 *vy_set,
-                                     fp32 *wz_set,
-                                     chassis_move_t *chassis_move_rc_to_vector)
-{
-    if (vx_set == NULL || vy_set == NULL || wz_set == NULL || chassis_move_rc_to_vector == NULL)
-    {
-        return;
-    }
-
-    *vx_set = chassis_move_rc_to_vector->chassis_RC->rc.ch[CHASSIS_X_CHANNEL] * CHASSIS_OPEN_RC_SCALE;
-    *vy_set = -chassis_move_rc_to_vector->chassis_RC->rc.ch[CHASSIS_Y_CHANNEL] * CHASSIS_OPEN_RC_SCALE;
-    *wz_set = -chassis_move_rc_to_vector->chassis_RC->rc.ch[CHASSIS_WZ_CHANNEL] * CHASSIS_OPEN_RC_SCALE;
-}
-
-static fp32 chassis_no_follow_yaw_get_wz_set(chassis_move_t *chassis_move_rc_to_vector)
+static fp32 chassis_drive_get_wz_set(chassis_move_t *chassis_move_rc_to_vector)
 {
     fp32 wz_normalized = 0.0f;
     fp32 wz_target = 0.0f;
