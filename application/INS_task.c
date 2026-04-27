@@ -149,6 +149,7 @@ void INS_task(void const *pvParameters)
     imu_cali_slove(INS_gyro, INS_accel, INS_mag, &bmi088_real_data, &ist8310_real_data);
 
     PID_init(&imu_temp_pid, PID_POSITION, imu_temp_PID, TEMPERATURE_PID_MAX_OUT, TEMPERATURE_PID_MAX_IOUT);
+    PID_improve_init(&imu_temp_pid, TEMPERATURE_PID_INTEGRAL_SEPARATION_ERR, TEMPERATURE_PID_D_FILTER_ALPHA);
     AHRS_init(INS_quat, INS_accel, INS_mag);
 
     accel_fliter_1[0] = accel_fliter_2[0] = accel_fliter_3[0] = INS_accel[0];
@@ -255,32 +256,70 @@ static void imu_cali_slove(fp32 gyro[3], fp32 accel[3], fp32 mag[3], bmi088_real
 static void imu_temp_control(fp32 temp)
 {
     uint16_t tempPWM;
-    static uint8_t temp_constant_time = 0;
+    fp32 target_temp = get_control_temperature();
+    fp32 pwm_set = 0.0f;
+    static uint16_t temp_constant_time = 0;
+    static fp32 last_pwm = 0.0f;
     if (first_temperate)
     {
-        PID_calc(&imu_temp_pid, temp, get_control_temperature());
-        if (imu_temp_pid.out < 0.0f)
+        PID_calc(&imu_temp_pid, temp, target_temp);
+        pwm_set = imu_temp_pid.out;
+        if (pwm_set < 0.0f)
         {
-            imu_temp_pid.out = 0.0f;
+            pwm_set = 0.0f;
         }
-        tempPWM = (uint16_t)imu_temp_pid.out;
+        else if (pwm_set > (fp32)(MPU6500_TEMP_PWM_MAX - 1))
+        {
+            pwm_set = (fp32)(MPU6500_TEMP_PWM_MAX - 1);
+        }
+
+        if (pwm_set > last_pwm + TEMPERATURE_PWM_RAMP_STEP)
+        {
+            pwm_set = last_pwm + TEMPERATURE_PWM_RAMP_STEP;
+        }
+        else if (pwm_set + TEMPERATURE_PWM_RAMP_STEP < last_pwm)
+        {
+            pwm_set = last_pwm - TEMPERATURE_PWM_RAMP_STEP;
+        }
+
+        last_pwm = pwm_set;
+        tempPWM = (uint16_t)last_pwm;
         IMU_temp_PWM(tempPWM);
     }
     else
     {
-        // 在温度未达到目标前，持续以最大功率预热。
-        if (temp > get_control_temperature())
+        if (temp >= target_temp - TEMPERATURE_READY_ERR)
         {
             temp_constant_time++;
-            if (temp_constant_time > 200)
+            if (temp_constant_time > TEMPERATURE_READY_COUNT)
             {
-                // 达到目标温度后，将积分项置到半功率附近以加快收敛。
                 first_temperate = 1;
-                imu_temp_pid.Iout = MPU6500_TEMP_PWM_MAX / 2.0f;
+                if (temp >= target_temp)
+                {
+                    imu_temp_pid.Iout = 0.0f;
+                }
+                else
+                {
+                    imu_temp_pid.Iout = MPU6500_TEMP_PWM_MAX / 2.0f;
+                }
+                last_pwm = imu_temp_pid.Iout;
             }
         }
+        else
+        {
+            temp_constant_time = 0U;
+        }
 
-        IMU_temp_PWM(MPU6500_TEMP_PWM_MAX - 1);
+        if (first_temperate)
+        {
+            tempPWM = (uint16_t)last_pwm;
+            IMU_temp_PWM(tempPWM);
+        }
+        else
+        {
+            last_pwm = (fp32)(MPU6500_TEMP_PWM_MAX - 1);
+            IMU_temp_PWM(MPU6500_TEMP_PWM_MAX - 1);
+        }
     }
 }
 

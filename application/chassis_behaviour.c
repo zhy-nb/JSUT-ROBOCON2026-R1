@@ -143,6 +143,11 @@ void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode)
     }
 }
 
+chassis_behaviour_e chassis_behaviour_get_mode(void)
+{
+    return chassis_behaviour_mode;
+}
+
 void chassis_behaviour_control_set(fp32 *vx_set,
                                    fp32 *vy_set,
                                    fp32 *angle_set,

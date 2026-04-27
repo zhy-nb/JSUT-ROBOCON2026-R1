@@ -1,77 +1,82 @@
 /**
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       pid.c
-  * @brief      PID 控制器实现
-  * @note       包含 PID 初始化、计算、清零和限幅等通用控制逻辑，
-  *             供底盘与设备控制模块复用。
+  * @brief      PID controller implementation.
+  * @note       Preserves the original API and adds optional derivative
+  *             low-pass filtering plus integral-separation for tighter
+  *             closed-loop behavior on Robocon chassis control.
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
 #include "pid.h"
-#include "main.h"
 
-#define LimitMax(input, max)   \
-    {                          \
-        if (input > max)       \
-        {                      \
-            input = max;       \
-        }                      \
-        else if (input < -max) \
-        {                      \
-            input = -max;      \
-        }                      \
+#include <stddef.h>
+#include <math.h>
+
+#define LimitMax(input, max)       \
+    {                              \
+        if ((input) > (max))       \
+        {                          \
+            (input) = (max);       \
+        }                          \
+        else if ((input) < -(max)) \
+        {                          \
+            (input) = -(max);      \
+        }                          \
     }
 
-/**
-  * @brief          pid struct data init
-  * @param[out]     pid: PID struct data point
-  * @param[in]      mode: PID_POSITION: normal pid
-  *                 PID_DELTA: delta pid
-  * @param[in]      PID: 0: kp, 1: ki, 2:kd
-  * @param[in]      max_out: pid max out
-  * @param[in]      max_iout: pid max iout
-  * @retval         none
-  */
-/**
-  * @brief          pid struct data init
-  * @param[out]     pid: PID结构数据指针
-  * @param[in]      mode: PID_POSITION:普通PID
-  *                 PID_DELTA: 差分PID
-  * @param[in]      PID: 0: kp, 1: ki, 2:kd
-  * @param[in]      max_out: pid最大输出
-  * @param[in]      max_iout: pid最大积分输出
-  * @retval         none
-  */
 void PID_init(pid_type_def *pid, uint8_t mode, const fp32 PID[3], fp32 max_out, fp32 max_iout)
 {
     if (pid == NULL || PID == NULL)
     {
         return;
     }
+
     pid->mode = mode;
     pid->Kp = PID[0];
     pid->Ki = PID[1];
     pid->Kd = PID[2];
     pid->max_out = max_out;
     pid->max_iout = max_iout;
-    pid->Dbuf[0] = pid->Dbuf[1] = pid->Dbuf[2] = 0.0f;
-    pid->error[0] = pid->error[1] = pid->error[2] = pid->Pout = pid->Iout = pid->Dout = pid->out = 0.0f;
+    pid->derivative_lpf_alpha = 1.0f;
+    pid->integral_separation_err = -1.0f;
+    pid->Dbuf[0] = 0.0f;
+    pid->Dbuf[1] = 0.0f;
+    pid->Dbuf[2] = 0.0f;
+    pid->error[0] = 0.0f;
+    pid->error[1] = 0.0f;
+    pid->error[2] = 0.0f;
+    pid->Pout = 0.0f;
+    pid->Iout = 0.0f;
+    pid->Dout = 0.0f;
+    pid->out = 0.0f;
+    pid->set = 0.0f;
+    pid->fdb = 0.0f;
 }
 
-/**
-  * @brief          pid calculate 
-  * @param[out]     pid: PID struct data point
-  * @param[in]      ref: feedback data 
-  * @param[in]      set: set point
-  * @retval         pid out
-  */
-/**
-  * @brief          pid计算
-  * @param[out]     pid: PID结构数据指针
-  * @param[in]      ref: 反馈数据
-  * @param[in]      set: 设定值
-  * @retval         pid输出
-  */
+void PID_improve_init(pid_type_def *pid, fp32 integral_separation_err, fp32 derivative_lpf_alpha)
+{
+    if (pid == NULL)
+    {
+        return;
+    }
+
+    pid->integral_separation_err = (integral_separation_err > 0.0f) ? integral_separation_err : -1.0f;
+
+    if (derivative_lpf_alpha < 0.0f)
+    {
+        pid->derivative_lpf_alpha = 0.0f;
+    }
+    else if (derivative_lpf_alpha > 1.0f)
+    {
+        pid->derivative_lpf_alpha = 1.0f;
+    }
+    else
+    {
+        pid->derivative_lpf_alpha = derivative_lpf_alpha;
+    }
+}
+
 fp32 PID_calc(pid_type_def *pid, fp32 ref, fp32 set)
 {
     if (pid == NULL)
@@ -84,14 +89,53 @@ fp32 PID_calc(pid_type_def *pid, fp32 ref, fp32 set)
     pid->set = set;
     pid->fdb = ref;
     pid->error[0] = set - ref;
+
     if (pid->mode == PID_POSITION)
     {
+        fp32 raw_d_error = 0.0f;
+        fp32 filtered_d_error = 0.0f;
+        fp32 candidate_iout = 0.0f;
+        fp32 tentative_out = 0.0f;
+        uint8_t allow_integral = 1U;
+
         pid->Pout = pid->Kp * pid->error[0];
-        pid->Iout += pid->Ki * pid->error[0];
+
         pid->Dbuf[2] = pid->Dbuf[1];
         pid->Dbuf[1] = pid->Dbuf[0];
-        pid->Dbuf[0] = (pid->error[0] - pid->error[1]);
+        raw_d_error = pid->error[0] - pid->error[1];
+        if (pid->derivative_lpf_alpha >= 1.0f)
+        {
+            filtered_d_error = raw_d_error;
+        }
+        else
+        {
+            filtered_d_error = pid->Dbuf[1] +
+                               pid->derivative_lpf_alpha * (raw_d_error - pid->Dbuf[1]);
+        }
+
+        pid->Dbuf[0] = filtered_d_error;
         pid->Dout = pid->Kd * pid->Dbuf[0];
+
+        if (pid->integral_separation_err > 0.0f &&
+            fabsf(pid->error[0]) > pid->integral_separation_err)
+        {
+            allow_integral = 0U;
+        }
+
+        candidate_iout = pid->Iout;
+        if (allow_integral)
+        {
+            candidate_iout += pid->Ki * pid->error[0];
+            LimitMax(candidate_iout, pid->max_iout);
+            tentative_out = pid->Pout + candidate_iout + pid->Dout;
+
+            if (!((tentative_out > pid->max_out && pid->error[0] > 0.0f) ||
+                  (tentative_out < -pid->max_out && pid->error[0] < 0.0f)))
+            {
+                pid->Iout = candidate_iout;
+            }
+        }
+
         LimitMax(pid->Iout, pid->max_iout);
         pid->out = pid->Pout + pid->Iout + pid->Dout;
         LimitMax(pid->out, pid->max_out);
@@ -107,19 +151,10 @@ fp32 PID_calc(pid_type_def *pid, fp32 ref, fp32 set)
         pid->out += pid->Pout + pid->Iout + pid->Dout;
         LimitMax(pid->out, pid->max_out);
     }
+
     return pid->out;
 }
 
-/**
-  * @brief          pid out clear
-  * @param[out]     pid: PID struct data point
-  * @retval         none
-  */
-/**
-  * @brief          pid 输出清除
-  * @param[out]     pid: PID结构数据指针
-  * @retval         none
-  */
 void PID_clear(pid_type_def *pid)
 {
     if (pid == NULL)
@@ -127,8 +162,16 @@ void PID_clear(pid_type_def *pid)
         return;
     }
 
-    pid->error[0] = pid->error[1] = pid->error[2] = 0.0f;
-    pid->Dbuf[0] = pid->Dbuf[1] = pid->Dbuf[2] = 0.0f;
-    pid->out = pid->Pout = pid->Iout = pid->Dout = 0.0f;
-    pid->fdb = pid->set = 0.0f;
+    pid->error[0] = 0.0f;
+    pid->error[1] = 0.0f;
+    pid->error[2] = 0.0f;
+    pid->Dbuf[0] = 0.0f;
+    pid->Dbuf[1] = 0.0f;
+    pid->Dbuf[2] = 0.0f;
+    pid->out = 0.0f;
+    pid->Pout = 0.0f;
+    pid->Iout = 0.0f;
+    pid->Dout = 0.0f;
+    pid->fdb = 0.0f;
+    pid->set = 0.0f;
 }

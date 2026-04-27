@@ -2,6 +2,7 @@
 
 #include "CAN_receive.h"
 #include "INS_task.h"
+#include "chassis_behaviour.h"
 #include "cmsis_os.h"
 #include "detect_task.h"
 #include "oled_ssd1306.h"
@@ -15,12 +16,16 @@ static void oled_copy_text(char **cursor, const char *text);
 static void oled_append_uint(char **cursor, uint32_t value);
 static int32_t oled_abs_i32(int32_t value);
 static uint8_t oled_get_motor_lost_mask(void);
+static uint8_t oled_get_motor_lost_count(uint8_t lost_mask);
 static uint8_t oled_is_all_connected(uint8_t motor_lost_mask, uint8_t rc_lost);
 static int32_t oled_get_average_motor_current_x10(void);
 static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask);
-static void oled_format_voltage(char *buffer, fp32 voltage);
-static void oled_format_current(char *buffer, int32_t current_x10);
+static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x10);
 static void oled_format_temperature(char *buffer, fp32 temperature);
+static void oled_format_mode_line(char *buffer,
+                                  chassis_behaviour_e mode,
+                                  uint8_t lost_mask,
+                                  uint8_t rc_lost);
 
 void oled_task(void const *argument)
 {
@@ -51,13 +56,15 @@ void oled_task(void const *argument)
         {
             oled_ssd1306_write_string(0, 0, "CONNECT OK");
 
-            oled_format_voltage(line_text, power_monitor_get_battery_voltage());
+            oled_format_power_line(line_text,
+                                   power_monitor_get_battery_voltage(),
+                                   oled_get_average_motor_current_x10());
             oled_ssd1306_write_string(0, 16, line_text);
 
-            oled_format_current(line_text, oled_get_average_motor_current_x10());
+            oled_format_temperature(line_text, get_imu_temperature());
             oled_ssd1306_write_string(0, 32, line_text);
 
-            oled_format_temperature(line_text, get_imu_temperature());
+            oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
             oled_ssd1306_write_string(0, 48, line_text);
         }
         else
@@ -73,6 +80,14 @@ void oled_task(void const *argument)
             {
                 oled_ssd1306_write_string(0, 16, "RC OK");
             }
+
+            oled_format_power_line(line_text,
+                                   power_monitor_get_battery_voltage(),
+                                   oled_get_average_motor_current_x10());
+            oled_ssd1306_write_string(0, 32, line_text);
+
+            oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
+            oled_ssd1306_write_string(0, 48, line_text);
         }
 
         oled_ssd1306_update();
@@ -159,6 +174,22 @@ static uint8_t oled_is_all_connected(uint8_t motor_lost_mask, uint8_t rc_lost)
     return 1U;
 }
 
+static uint8_t oled_get_motor_lost_count(uint8_t lost_mask)
+{
+    uint8_t i;
+    uint8_t count = 0U;
+
+    for (i = 0U; i < OLED_CHASSIS_MOTOR_NUM; i++)
+    {
+        if ((lost_mask & (uint8_t)(1U << i)) != 0U)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
 static int32_t oled_get_average_motor_current_x10(void)
 {
     uint8_t i;
@@ -203,14 +234,16 @@ static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask)
     *p = '\0';
 }
 
-static void oled_format_voltage(char *buffer, fp32 voltage)
+static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x10)
 {
     int32_t voltage_x10 = 0;
-    int32_t whole = 0;
-    int32_t frac = 0;
+    int32_t voltage_whole = 0;
+    int32_t voltage_frac = 0;
+    int32_t current_whole = 0;
+    int32_t current_frac = 0;
     char *p = buffer;
 
-    oled_copy_text(&p, "VOLT ");
+    *p++ = 'V';
 
     if (voltage >= 0.0f)
     {
@@ -223,24 +256,16 @@ static void oled_format_voltage(char *buffer, fp32 voltage)
         voltage_x10 = -voltage_x10;
     }
 
-    whole = voltage_x10 / 10;
-    frac = voltage_x10 % 10;
+    voltage_whole = voltage_x10 / 10;
+    voltage_frac = voltage_x10 % 10;
 
-    oled_append_uint(&p, (uint32_t)whole);
+    oled_append_uint(&p, (uint32_t)voltage_whole);
     *p++ = '.';
-    *p++ = (char)('0' + frac);
+    *p++ = (char)('0' + voltage_frac);
     *p++ = ' ';
-    *p++ = 'V';
-    *p = '\0';
-}
-
-static void oled_format_current(char *buffer, int32_t current_x10)
-{
-    int32_t whole = 0;
-    int32_t frac = 0;
-    char *p = buffer;
-
-    oled_copy_text(&p, "CUR ");
+    *p++ = 'C';
+    *p++ = 'U';
+    *p++ = 'R';
 
     if (current_x10 < 0)
     {
@@ -248,13 +273,12 @@ static void oled_format_current(char *buffer, int32_t current_x10)
         current_x10 = -current_x10;
     }
 
-    whole = current_x10 / 10;
-    frac = current_x10 % 10;
+    current_whole = current_x10 / 10;
+    current_frac = current_x10 % 10;
 
-    oled_append_uint(&p, (uint32_t)whole);
+    oled_append_uint(&p, (uint32_t)current_whole);
     *p++ = '.';
-    *p++ = (char)('0' + frac);
-    *p++ = ' ';
+    *p++ = (char)('0' + current_frac);
     *p++ = 'A';
     *p = '\0';
 }
@@ -297,5 +321,52 @@ static void oled_format_temperature(char *buffer, fp32 temperature)
     *p++ = (char)('0' + frac);
     *p++ = ' ';
     *p++ = 'C';
+    *p = '\0';
+}
+
+static void oled_format_mode_line(char *buffer,
+                                  chassis_behaviour_e mode,
+                                  uint8_t lost_mask,
+                                  uint8_t rc_lost)
+{
+    uint8_t lost_count = oled_get_motor_lost_count(lost_mask);
+    char *p = buffer;
+
+    oled_copy_text(&p, "MODE ");
+
+    if (mode == CHASSIS_ZERO_FORCE)
+    {
+        oled_copy_text(&p, "ZERO ");
+    }
+    else if (mode == CHASSIS_NO_MOVE)
+    {
+        oled_copy_text(&p, "STOP ");
+    }
+    else
+    {
+        oled_copy_text(&p, "DRV ");
+    }
+
+    if (!detect_task_is_inited())
+    {
+        oled_copy_text(&p, "INIT");
+    }
+    else if (rc_lost != 0U)
+    {
+        oled_copy_text(&p, "RC OFF");
+    }
+    else if (lost_count == 0U)
+    {
+        oled_copy_text(&p, "NORMAL");
+    }
+    else if (lost_count == 1U)
+    {
+        oled_copy_text(&p, "DEG 3W");
+    }
+    else
+    {
+        oled_copy_text(&p, "M2+ OFF");
+    }
+
     *p = '\0';
 }

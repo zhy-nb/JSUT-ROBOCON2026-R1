@@ -32,3 +32,4 @@ jsut-robocon2026-r1\chassis_task.o: D:\keil5\ARM\ARMCC\Bin\..\include\string.h
 jsut-robocon2026-r1\chassis_task.o: D:\keil5\ARM\ARMCC\Bin\..\include\math.h
 jsut-robocon2026-r1\chassis_task.o: ..\application\detect_task.h
 jsut-robocon2026-r1\chassis_task.o: ..\application\INS_task.h
+jsut-robocon2026-r1\chassis_task.o: ..\application\power_monitor.h

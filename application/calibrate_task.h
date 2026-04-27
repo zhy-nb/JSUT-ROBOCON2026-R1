@@ -55,6 +55,7 @@
 #define FLASH_USER_ADDR             ADDR_FLASH_SECTOR_9
 
 #define GYRO_CONST_MAX_TEMP         45.0f
+#define GYRO_CONTROL_TARGET_TEMP    40.0f
 
 #define CALI_FUNC_CMD_ON            1
 #define CALI_FUNC_CMD_INIT          0

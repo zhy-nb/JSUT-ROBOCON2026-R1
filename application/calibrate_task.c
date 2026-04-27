@@ -232,7 +232,7 @@ static void RC_cmd_to_calibrate(void)
         rc_cmd_time = 0;
         cali_sensor[CALI_GYRO].cali_cmd = 1;
         // 校准时把目标控温更新到安全范围内。
-        head_cali.temperature = 40.0f;
+        head_cali.temperature = GYRO_CONTROL_TARGET_TEMP;
         if (head_cali.temperature > (int8_t)(GYRO_CONST_MAX_TEMP))
         {
             head_cali.temperature = (int8_t)(GYRO_CONST_MAX_TEMP);
@@ -413,7 +413,7 @@ static bool_t cali_head_hook(uint32_t *cali, bool_t cmd)
     // 回填设备 ID。
     local_cali_t->self_id = SELF_ID;
     // 设置默认 IMU 控制温度。
-    local_cali_t->temperature = 40.0f;
+    local_cali_t->temperature = GYRO_CONTROL_TARGET_TEMP;
     if (local_cali_t->temperature > (int8_t)(GYRO_CONST_MAX_TEMP))
     {
         local_cali_t->temperature = (int8_t)(GYRO_CONST_MAX_TEMP);

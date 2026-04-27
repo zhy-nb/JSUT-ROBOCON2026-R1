@@ -1,9 +1,9 @@
-ï»¿/**
+/**
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       CAN_receive.c
-  * @brief      CAN ç”µæœºåé¦ˆè§£æä¸æ§åˆ¶æŒ‡ä»¤å‘é€å®ç°
-  * @note       å¤„ç† FIFO0 å›è°ƒä¸­çš„åé¦ˆæ›´æ–°ï¼Œå¹¶ç»Ÿä¸€å°è£…åº•ç›˜ä¸æ‰©å±•
-  *             ç”µæœºçš„ç”µæµæ§åˆ¶æŠ¥æ–‡å‘é€é€»è¾‘ã€‚
+  * @brief      CAN µç»ú·´À¡½âÎöÓë¿ØÖÆÖ¸Áî·¢ËÍÊµÏÖ
+  * @note       ´¦Àí FIFO0 »Øµ÷ÖĞµÄ·´À¡¸üĞÂ£¬²¢Í³Ò»·â×°µ×ÅÌÓëÀ©Õ¹
+  *             µç»úµÄµçÁ÷¿ØÖÆ±¨ÎÄ·¢ËÍÂß¼­¡£
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
@@ -17,21 +17,21 @@ extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
 
 /**
-  * @brief  ä» 8 å­—èŠ‚ç”µæœºåé¦ˆå¸§ä¸­æå– RM ç”µæœºå¸¸ç”¨æµ‹é‡é‡
+  * @brief  ´Ó 8 ×Ö½Úµç»ú·´À¡Ö¡ÖĞÌáÈ¡ RM µç»ú³£ÓÃ²âÁ¿Á¿
   */
 #define get_motor_measure(ptr, data)                                    \
     {                                                                   \
         (ptr)->last_ecd = (ptr)->ecd;                                   \
         (ptr)->ecd = (uint16_t)((data)[0] << 8 | (data)[1]);            \
-        (ptr)->speed_rpm = (uint16_t)((data)[2] << 8 | (data)[3]);      \
-        (ptr)->given_current = (uint16_t)((data)[4] << 8 | (data)[5]);  \
+        (ptr)->speed_rpm = (int16_t)((uint16_t)((data)[2] << 8 | (data)[3]));      \
+        (ptr)->given_current = (int16_t)((uint16_t)((data)[4] << 8 | (data)[5]));  \
         (ptr)->temperate = (data)[6];                                   \
     }
 
 /**
-  * @brief  ç”µæœºåé¦ˆç¼“å­˜é¡ºåº
+  * @brief  µç»ú·´À¡»º´æË³Ğò
   *
-  * @note   0~3 ä¸ºåº•ç›˜å››ä¸ª 3508ï¼Œ4~5 ä¸º yaw/pitch 6020ï¼Œ6 ä¸ºæ‹¨å¼¹ 2006ã€‚
+  * @note   0~3 Îªµ×ÅÌËÄ¸ö 3508£¬4~5 Îª yaw/pitch 6020£¬6 Îª²¦µ¯ 2006¡£
   */
 static motor_measure_t motor_chassis[7];
 
@@ -43,10 +43,10 @@ static CAN_TxHeaderTypeDef chassis_tx_message;
 static uint8_t chassis_can_send_data[8];
 
 /**
-  * @brief  CAN FIFO0 æ¥æ”¶å›è°ƒ
+  * @brief  CAN FIFO0 ½ÓÊÕ»Øµ÷
   *
-  * @note   æ”¶åˆ°ç”µæœºåé¦ˆå¸§åï¼Œå…ˆæŠŠæ ‡å‡†å¸§ ID æ˜ å°„åˆ° `motor_chassis[]`
-  *         ä¸­å¯¹åº”çš„æ§½ä½ï¼Œå†è§¦å‘å¯¹åº”è®¾å¤‡çš„æ‰çº¿æ£€æµ‹é’©å­ã€‚
+  * @note   ÊÕµ½µç»ú·´À¡Ö¡ºó£¬ÏÈ°Ñ±ê×¼Ö¡ ID Ó³Éäµ½ `motor_chassis[]`
+  *         ÖĞ¶ÔÓ¦µÄ²ÛÎ»£¬ÔÙ´¥·¢¶ÔÓ¦Éè±¸µÄµôÏß¼ì²â¹³×Ó¡£
   */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
@@ -67,7 +67,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         {
             static uint8_t i = 0;
 
-            // å°†æ ‡å‡†å¸§ ID è½¬æ¢ä¸º motor_chassis[] ä¸­çš„æ•°ç»„ç´¢å¼•ã€‚
+            // ½«±ê×¼Ö¡ ID ×ª»»Îª motor_chassis[] ÖĞµÄÊı×éË÷Òı¡£
             i = rx_header.StdId - CAN_3508_M1_ID;
             get_motor_measure(&motor_chassis[i], rx_data);
             detect_hook(CHASSIS_MOTOR1_TOE + i);
@@ -82,7 +82,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 }
 
 /**
-  * @brief  å‘é€äº‘å°ç›¸å…³ç”µæœºæ§åˆ¶ç”µæµ
+  * @brief  ·¢ËÍÔÆÌ¨Ïà¹Øµç»ú¿ØÖÆµçÁ÷
   */
 void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
 {
@@ -105,7 +105,7 @@ void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
 }
 
 /**
-  * @brief  é€šè¿‡ CAN1 å‘é€ 0x1FF ç”µæœºæ§åˆ¶ç”µæµ
+  * @brief  Í¨¹ı CAN1 ·¢ËÍ 0x1FF µç»ú¿ØÖÆµçÁ÷
   */
 void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
 {
@@ -128,9 +128,9 @@ void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, int16_t r
 }
 
 /**
-  * @brief  é€šè¿‡ CAN1 å‘é€ 0x207 ç”µæœºæ§åˆ¶ç”µæµ
+  * @brief  Í¨¹ı CAN1 ·¢ËÍ 0x207 µç»ú¿ØÖÆµçÁ÷
   *
-  * @note   0x205~0x208 å…±ç”¨ 0x1FF æŒ‡ä»¤å¸§ï¼Œè¿™é‡Œåªå¡«å……ç¬¬ä¸‰è·¯ç”µæµã€‚
+  * @note   0x205~0x208 ¹²ÓÃ 0x1FF Ö¸ÁîÖ¡£¬ÕâÀïÖ»Ìî³äµÚÈıÂ·µçÁ÷¡£
   */
 void CAN_cmd_motor207_can1(int16_t current)
 {
@@ -153,7 +153,7 @@ void CAN_cmd_motor207_can1(int16_t current)
 }
 
 /**
-  * @brief  å‘é€ 0x700 CAN åŒ…ï¼Œè§¦å‘ 3508 å¿«é€Ÿè®¾ç½® ID
+  * @brief  ·¢ËÍ 0x700 CAN °ü£¬´¥·¢ 3508 ¿ìËÙÉèÖÃ ID
   */
 void CAN_cmd_chassis_reset_ID(void)
 {
@@ -176,7 +176,7 @@ void CAN_cmd_chassis_reset_ID(void)
 }
 
 /**
-  * @brief  å‘é€åº•ç›˜å››ä¸ª 3508 ç”µæœºæ§åˆ¶ç”µæµ
+  * @brief  ·¢ËÍµ×ÅÌËÄ¸ö 3508 µç»ú¿ØÖÆµçÁ÷
   */
 void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
 {
@@ -199,7 +199,7 @@ void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t mot
 }
 
 /**
-  * @brief  è·å– yaw 6020 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
+  * @brief  »ñÈ¡ yaw 6020 µç»ú·´À¡Êı¾İÖ¸Õë
   */
 const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
 {
@@ -207,7 +207,7 @@ const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
 }
 
 /**
-  * @brief  è·å– pitch 6020 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
+  * @brief  »ñÈ¡ pitch 6020 µç»ú·´À¡Êı¾İÖ¸Õë
   */
 const motor_measure_t *get_pitch_gimbal_motor_measure_point(void)
 {
@@ -215,7 +215,7 @@ const motor_measure_t *get_pitch_gimbal_motor_measure_point(void)
 }
 
 /**
-  * @brief  è·å–æ‹¨å¼¹ 2006 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
+  * @brief  »ñÈ¡²¦µ¯ 2006 µç»ú·´À¡Êı¾İÖ¸Õë
   */
 const motor_measure_t *get_trigger_motor_measure_point(void)
 {
@@ -223,9 +223,9 @@ const motor_measure_t *get_trigger_motor_measure_point(void)
 }
 
 /**
-  * @brief  è·å–åº•ç›˜ 3508 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
+  * @brief  »ñÈ¡µ×ÅÌ 3508 µç»ú·´À¡Êı¾İÖ¸Õë
   *
-  * @param[in] i ç”µæœºç¼–å·ï¼ŒèŒƒå›´ [0, 3]
+  * @param[in] i µç»ú±àºÅ£¬·¶Î§ [0, 3]
   */
 const motor_measure_t *get_chassis_motor_measure_point(uint8_t i)
 {

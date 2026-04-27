@@ -52,11 +52,13 @@
 #define CHASSIS_WZ_ACC_DOWN 16.0f
 
 /* ----------------------- Kinematics ------------------------------------- */
-#define MOTOR_SPEED_TO_CHASSIS_SPEED_VX 0.25f
-#define MOTOR_SPEED_TO_CHASSIS_SPEED_VY 0.25f
-#define MOTOR_SPEED_TO_CHASSIS_SPEED_WZ 0.25f
-
-#define MOTOR_DISTANCE_TO_CENTER 0.2f
+#define CHASSIS_WHEEL_VECTOR_AVG_INV 0.25f
+#define CHASSIS_ROTATION_RADIUS_BASE 0.20f
+#define CHASSIS_FRONT_WZ_COMPENSATION 0.90f
+#define CHASSIS_REAR_WZ_COMPENSATION 1.10f
+#define CHASSIS_FRONT_WZ_RADIUS (CHASSIS_ROTATION_RADIUS_BASE * CHASSIS_FRONT_WZ_COMPENSATION)
+#define CHASSIS_REAR_WZ_RADIUS (CHASSIS_ROTATION_RADIUS_BASE * CHASSIS_REAR_WZ_COMPENSATION)
+#define CHASSIS_WZ_FEEDBACK_DENOM (2.0f * (CHASSIS_FRONT_WZ_RADIUS + CHASSIS_REAR_WZ_RADIUS))
 
 /* ----------------------- Task Timing ------------------------------------ */
 #define CHASSIS_CONTROL_TIME_MS 2
@@ -72,17 +74,16 @@
 #define MAX_WHEEL_SPEED 4.0f
 #define NORMAL_MAX_CHASSIS_SPEED_X 2.0f
 #define NORMAL_MAX_CHASSIS_SPEED_Y 1.5f
-
-#define CHASSIS_WZ_SET_SCALE 0.1f
+#define NORMAL_MAX_CHASSIS_WZ (660.0f * CHASSIS_WZ_RC_SEN)
 
 /* Runtime degradation policy:
  * - RC lost: command target is reset to zero but the control loop stays alive.
- * - 1 motor lost: chassis enters slow translational degraded mode.
+ * - 1 motor lost: chassis keeps three-wheel omnidirectional degraded motion.
  * - 2 or more motors lost: chassis stops and waits for recovery.
  */
 #define CHASSIS_DEGRADE_STOP_MOTOR_COUNT 2u
-#define CHASSIS_SINGLE_MOTOR_LOST_MOVE_SCALE 0.35f
-#define CHASSIS_SINGLE_MOTOR_LOST_WZ_SCALE 0.0f
+#define CHASSIS_SINGLE_MOTOR_LOST_TRANSLATION_SCALE 0.45f
+#define CHASSIS_SINGLE_MOTOR_LOST_WZ_LIMIT_SCALE 0.25f
 
 #define SWING_NO_MOVE_ANGLE 0.7f
 #define SWING_MOVE_ANGLE 0.31415926535897932384626433832795f
@@ -93,6 +94,18 @@
 #define M3505_MOTOR_SPEED_PID_KD 0.0f
 #define M3505_MOTOR_SPEED_PID_MAX_OUT MAX_MOTOR_CAN_CURRENT
 #define M3505_MOTOR_SPEED_PID_MAX_IOUT 2000.0f
+#define CHASSIS_WHEEL_PID_INTEGRAL_SEPARATION_ERR 0.45f
+#define CHASSIS_WHEEL_PID_D_FILTER_ALPHA 0.35f
+#define CHASSIS_WHEEL_SPEED_FF_GAIN 1600.0f
+#define CHASSIS_WHEEL_ACCEL_FF_GAIN 120.0f
+#define CHASSIS_WHEEL_STATIC_FF_CURRENT 260.0f
+#define CHASSIS_WHEEL_FF_SPEED_DEADBAND 0.05f
+#define CHASSIS_WHEEL_FF_MAX_CURRENT 4000.0f
+#define CHASSIS_TOTAL_CURRENT_LIMIT 26000.0f
+#define CHASSIS_NOMINAL_BATTERY_VOLTAGE 24.0f
+#define CHASSIS_BATTERY_COMPENSATION_DEADBAND 0.3f
+#define CHASSIS_BATTERY_COMPENSATION_MIN_SCALE 0.90f
+#define CHASSIS_BATTERY_COMPENSATION_MAX_SCALE 1.15f
 
 /**
   * @brief  Chassis vector control modes used by the control loop.
@@ -112,6 +125,9 @@ typedef struct
     fp32 accel;
     fp32 speed;
     fp32 speed_set;
+    fp32 speed_set_last;
+    fp32 feedforward_current;
+    fp32 current_set;
     int16_t give_current;
 } chassis_motor_t;
 
@@ -145,6 +161,9 @@ typedef struct
     fp32 vx_min_speed;
     fp32 vy_max_speed;
     fp32 vy_min_speed;
+    fp32 wz_max_speed;
+    fp32 wz_min_speed;
+    fp32 wheel_speed_limit;
 
     fp32 chassis_yaw;
     fp32 chassis_pitch;

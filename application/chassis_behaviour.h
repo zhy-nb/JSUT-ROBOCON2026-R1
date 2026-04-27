@@ -35,6 +35,11 @@ typedef enum
 extern void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode);
 
 /**
+  * @brief  Get the latest automatically selected behaviour mode.
+  */
+extern chassis_behaviour_e chassis_behaviour_get_mode(void);
+
+/**
   * @brief  Generate chassis target vector from current behaviour mode.
   *
   * @param[out] vx_set    Chassis X target in m/s.

@@ -39,3 +39,4 @@ jsut-robocon2026-r1\power_monitor.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4
 jsut-robocon2026-r1\power_monitor.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h
 jsut-robocon2026-r1\power_monitor.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 jsut-robocon2026-r1\power_monitor.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
+jsut-robocon2026-r1\power_monitor.o: D:\keil5\ARM\ARMCC\Bin\..\include\math.h

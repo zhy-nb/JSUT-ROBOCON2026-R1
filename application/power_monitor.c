@@ -1,15 +1,21 @@
 #include "power_monitor.h"
 
 #include "main.h"
+#include <math.h>
 
 #define POWER_MONITOR_ADC_MAX_COUNT 4095.0f
 #define POWER_MONITOR_ADC_VREF      3.3f
 #define POWER_MONITOR_BAT_SCALE     11.0f
 #define POWER_MONITOR_SAMPLE_NUM    8U
 #define POWER_MONITOR_ADC_TIMEOUT   100000U
+#define POWER_MONITOR_COMP_FILTER_ALPHA 0.15f
+#define POWER_MONITOR_VALID_VOLTAGE_MIN 18.0f
+#define POWER_MONITOR_VALID_VOLTAGE_MAX 30.0f
 
 static uint8_t power_monitor_inited = 0U;
 static fp32 power_monitor_battery_voltage = 0.0f;
+static uint8_t power_monitor_compensation_inited = 0U;
+static fp32 power_monitor_compensation_voltage = 24.0f;
 
 static uint16_t power_monitor_read_adc3_in8(void);
 
@@ -70,6 +76,55 @@ fp32 power_monitor_get_battery_voltage(void)
         ((fp32)adc_value * POWER_MONITOR_ADC_VREF * POWER_MONITOR_BAT_SCALE) / POWER_MONITOR_ADC_MAX_COUNT;
 
     return power_monitor_battery_voltage;
+}
+
+fp32 power_monitor_get_voltage_compensation_scale(fp32 nominal_voltage,
+                                                  fp32 deadband_voltage,
+                                                  fp32 min_scale,
+                                                  fp32 max_scale)
+{
+    fp32 battery_voltage = power_monitor_get_battery_voltage();
+    fp32 delta_voltage = 0.0f;
+    fp32 scale = 1.0f;
+
+    if (nominal_voltage <= 0.0f || min_scale <= 0.0f || max_scale <= 0.0f || min_scale > max_scale)
+    {
+        return 1.0f;
+    }
+
+    if (battery_voltage < POWER_MONITOR_VALID_VOLTAGE_MIN || battery_voltage > POWER_MONITOR_VALID_VOLTAGE_MAX)
+    {
+        return 1.0f;
+    }
+
+    if (power_monitor_compensation_inited == 0U)
+    {
+        power_monitor_compensation_voltage = battery_voltage;
+        power_monitor_compensation_inited = 1U;
+    }
+    else
+    {
+        power_monitor_compensation_voltage +=
+            POWER_MONITOR_COMP_FILTER_ALPHA * (battery_voltage - power_monitor_compensation_voltage);
+    }
+
+    delta_voltage = power_monitor_compensation_voltage - nominal_voltage;
+    if (fabsf(delta_voltage) <= deadband_voltage)
+    {
+        return 1.0f;
+    }
+
+    scale = nominal_voltage / power_monitor_compensation_voltage;
+    if (scale < min_scale)
+    {
+        scale = min_scale;
+    }
+    else if (scale > max_scale)
+    {
+        scale = max_scale;
+    }
+
+    return scale;
 }
 
 static uint16_t power_monitor_read_adc3_in8(void)

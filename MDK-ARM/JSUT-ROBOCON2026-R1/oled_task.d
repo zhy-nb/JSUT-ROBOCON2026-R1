@@ -3,6 +3,12 @@ jsut-robocon2026-r1\oled_task.o: ..\application\oled_task.h
 jsut-robocon2026-r1\oled_task.o: ..\application\CAN_receive.h
 jsut-robocon2026-r1\oled_task.o: ..\application\struct_typedef.h
 jsut-robocon2026-r1\oled_task.o: ..\application\INS_task.h
+jsut-robocon2026-r1\oled_task.o: ..\application\chassis_behaviour.h
+jsut-robocon2026-r1\oled_task.o: ..\application\chassis_task.h
+jsut-robocon2026-r1\oled_task.o: ../components/controller/pid.h
+jsut-robocon2026-r1\oled_task.o: ..\application\remote_control.h
+jsut-robocon2026-r1\oled_task.o: ../bsp/boards/bsp_rc.h
+jsut-robocon2026-r1\oled_task.o: ../components/algorithm/user_lib.h
 jsut-robocon2026-r1\oled_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.h
 jsut-robocon2026-r1\oled_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
 jsut-robocon2026-r1\oled_task.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h
