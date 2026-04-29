@@ -51,6 +51,16 @@
 #define CHASSIS_WZ_ACC_UP 10.0f
 #define CHASSIS_WZ_ACC_DOWN 16.0f
 
+#define CHASSIS_VX_ZERO_DEC 6.0f
+#define CHASSIS_VY_ZERO_DEC 6.0f
+#define CHASSIS_WZ_ZERO_DEC 20.0f
+#define CHASSIS_TRANSLATION_ZERO_DEC 6.0f
+#define CHASSIS_CMD_ZERO_SNAP 0.02f
+#define CHASSIS_WZ_ZERO_SNAP 0.05f
+
+#define CHASSIS_STOP_SPEED_SET_DEADBAND 0.02f
+#define CHASSIS_STOP_SPEED_FEEDBACK_DEADBAND 0.03f
+
 /* ----------------------- Kinematics ------------------------------------- */
 #define CHASSIS_WHEEL_VECTOR_AVG_INV 0.25f
 #define CHASSIS_ROTATION_RADIUS_BASE 0.20f

@@ -19,9 +19,15 @@ static uint8_t oled_get_motor_lost_mask(void);
 static uint8_t oled_get_motor_lost_count(uint8_t lost_mask);
 static uint8_t oled_is_all_connected(uint8_t motor_lost_mask, uint8_t rc_lost);
 static int32_t oled_get_average_motor_current_x10(void);
+static int32_t oled_get_total_motor_current_x10(void);
 static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask);
 static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x10);
-static void oled_format_temperature(char *buffer, fp32 temperature);
+static void oled_format_voltage_total_current_line(char *buffer,
+                                                   fp32 voltage,
+                                                   int32_t total_current_x10);
+static void oled_format_total_current_temperature_line(char *buffer,
+                                                       int32_t total_current_x10,
+                                                       fp32 temperature);
 static void oled_format_mode_line(char *buffer,
                                   chassis_behaviour_e mode,
                                   uint8_t lost_mask,
@@ -61,7 +67,9 @@ void oled_task(void const *argument)
                                    oled_get_average_motor_current_x10());
             oled_ssd1306_write_string(0, 16, line_text);
 
-            oled_format_temperature(line_text, get_imu_temperature());
+            oled_format_total_current_temperature_line(line_text,
+                                                       oled_get_total_motor_current_x10(),
+                                                       get_imu_temperature());
             oled_ssd1306_write_string(0, 32, line_text);
 
             oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
@@ -81,9 +89,9 @@ void oled_task(void const *argument)
                 oled_ssd1306_write_string(0, 16, "RC OK");
             }
 
-            oled_format_power_line(line_text,
-                                   power_monitor_get_battery_voltage(),
-                                   oled_get_average_motor_current_x10());
+            oled_format_voltage_total_current_line(line_text,
+                                                   power_monitor_get_battery_voltage(),
+                                                   oled_get_total_motor_current_x10());
             oled_ssd1306_write_string(0, 32, line_text);
 
             oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
@@ -208,6 +216,22 @@ static int32_t oled_get_average_motor_current_x10(void)
            OLED_MOTOR_CURRENT_FULL_SCALE;
 }
 
+static int32_t oled_get_total_motor_current_x10(void)
+{
+    uint8_t i;
+    int32_t current_sum = 0;
+    const motor_measure_t *motor_measure;
+
+    for (i = 0U; i < OLED_CHASSIS_MOTOR_NUM; i++)
+    {
+        motor_measure = get_chassis_motor_measure_point(i);
+        current_sum += oled_abs_i32(motor_measure->given_current);
+    }
+
+    return (current_sum * OLED_MOTOR_CURRENT_MAX_A_X10 + (OLED_MOTOR_CURRENT_FULL_SCALE / 2)) /
+           OLED_MOTOR_CURRENT_FULL_SCALE;
+}
+
 static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask)
 {
     uint8_t i;
@@ -283,14 +307,80 @@ static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x
     *p = '\0';
 }
 
-static void oled_format_temperature(char *buffer, fp32 temperature)
+static void oled_format_voltage_total_current_line(char *buffer,
+                                                   fp32 voltage,
+                                                   int32_t total_current_x10)
 {
-    int32_t temp_x10 = 0;
-    int32_t whole = 0;
-    int32_t frac = 0;
+    int32_t voltage_x10 = 0;
+    int32_t voltage_whole = 0;
+    int32_t voltage_frac = 0;
+    int32_t current_whole = 0;
+    int32_t current_frac = 0;
     char *p = buffer;
 
-    oled_copy_text(&p, "TEMP ");
+    *p++ = 'V';
+
+    if (voltage >= 0.0f)
+    {
+        voltage_x10 = (int32_t)(voltage * 10.0f + 0.5f);
+    }
+    else
+    {
+        voltage_x10 = (int32_t)(voltage * 10.0f - 0.5f);
+        *p++ = '-';
+        voltage_x10 = -voltage_x10;
+    }
+
+    voltage_whole = voltage_x10 / 10;
+    voltage_frac = voltage_x10 % 10;
+
+    oled_append_uint(&p, (uint32_t)voltage_whole);
+    *p++ = '.';
+    *p++ = (char)('0' + voltage_frac);
+    oled_copy_text(&p, " SUM");
+
+    if (total_current_x10 < 0)
+    {
+        *p++ = '-';
+        total_current_x10 = -total_current_x10;
+    }
+
+    current_whole = total_current_x10 / 10;
+    current_frac = total_current_x10 % 10;
+
+    oled_append_uint(&p, (uint32_t)current_whole);
+    *p++ = '.';
+    *p++ = (char)('0' + current_frac);
+    *p++ = 'A';
+    *p = '\0';
+}
+
+static void oled_format_total_current_temperature_line(char *buffer,
+                                                       int32_t total_current_x10,
+                                                       fp32 temperature)
+{
+    int32_t current_whole = 0;
+    int32_t current_frac = 0;
+    int32_t temp_x10 = 0;
+    int32_t temp_whole = 0;
+    int32_t temp_frac = 0;
+    char *p = buffer;
+
+    oled_copy_text(&p, "SUM");
+
+    if (total_current_x10 < 0)
+    {
+        *p++ = '-';
+        total_current_x10 = -total_current_x10;
+    }
+
+    current_whole = total_current_x10 / 10;
+    current_frac = total_current_x10 % 10;
+
+    oled_append_uint(&p, (uint32_t)current_whole);
+    *p++ = '.';
+    *p++ = (char)('0' + current_frac);
+    oled_copy_text(&p, "A T");
 
     if (temperature >= 0.0f)
     {
@@ -303,23 +393,22 @@ static void oled_format_temperature(char *buffer, fp32 temperature)
         temp_x10 = -temp_x10;
     }
 
-    whole = temp_x10 / 10;
-    frac = temp_x10 % 10;
+    temp_whole = temp_x10 / 10;
+    temp_frac = temp_x10 % 10;
 
-    if (whole >= 100)
+    if (temp_whole >= 100)
     {
-        *p++ = (char)('0' + ((whole / 100) % 10));
+        *p++ = (char)('0' + ((temp_whole / 100) % 10));
     }
 
-    if (whole >= 10)
+    if (temp_whole >= 10)
     {
-        *p++ = (char)('0' + ((whole / 10) % 10));
+        *p++ = (char)('0' + ((temp_whole / 10) % 10));
     }
 
-    *p++ = (char)('0' + (whole % 10));
+    *p++ = (char)('0' + (temp_whole % 10));
     *p++ = '.';
-    *p++ = (char)('0' + frac);
-    *p++ = ' ';
+    *p++ = (char)('0' + temp_frac);
     *p++ = 'C';
     *p = '\0';
 }

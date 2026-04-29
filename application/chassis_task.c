@@ -754,18 +754,83 @@ void chassis_rc_to_control_vector(fp32 *vx_set, fp32 *vy_set, chassis_move_t *ch
     vx_set_channel = (vx_norm * 660.0f) * CHASSIS_VX_RC_SEN * CHASSIS_RC_SLOW_SEN;
     vy_set_channel = (vy_norm * 660.0f) * (-CHASSIS_VY_RC_SEN) * CHASSIS_RC_SLOW_SEN;
 
-    chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out =
-        chassis_slew_limit(vx_set_channel,
-                           chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out,
-                           CHASSIS_VX_ACC_UP,
-                           CHASSIS_VX_ACC_DOWN,
-                           CHASSIS_CONTROL_TIME);
-    chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out =
-        chassis_slew_limit(vy_set_channel,
-                           chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out,
-                           CHASSIS_VY_ACC_UP,
-                           CHASSIS_VY_ACC_DOWN,
-                           CHASSIS_CONTROL_TIME);
+    if (vx_channel == 0 && vy_channel == 0)
+    {
+        fp32 translation_norm = sqrtf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out *
+                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out +
+                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out *
+                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out);
+
+        if (translation_norm < CHASSIS_CMD_ZERO_SNAP)
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
+        }
+        else
+        {
+            fp32 next_norm = translation_norm - CHASSIS_TRANSLATION_ZERO_DEC * CHASSIS_CONTROL_TIME;
+
+            if (next_norm < CHASSIS_CMD_ZERO_SNAP)
+            {
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
+            }
+            else
+            {
+                fp32 zero_scale = next_norm / translation_norm;
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out *= zero_scale;
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out *= zero_scale;
+            }
+        }
+    }
+    else
+    {
+        if (vx_channel == 0)
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out =
+                chassis_slew_limit(0.0f,
+                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out,
+                                   CHASSIS_VX_ZERO_DEC,
+                                   CHASSIS_VX_ZERO_DEC,
+                                   CHASSIS_CONTROL_TIME);
+            if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out) < CHASSIS_CMD_ZERO_SNAP)
+            {
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
+            }
+        }
+        else
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out =
+                chassis_slew_limit(vx_set_channel,
+                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out,
+                                   CHASSIS_VX_ACC_UP,
+                                   CHASSIS_VX_ACC_DOWN,
+                                   CHASSIS_CONTROL_TIME);
+        }
+
+        if (vy_channel == 0)
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out =
+                chassis_slew_limit(0.0f,
+                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out,
+                                   CHASSIS_VY_ZERO_DEC,
+                                   CHASSIS_VY_ZERO_DEC,
+                                   CHASSIS_CONTROL_TIME);
+            if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out) < CHASSIS_CMD_ZERO_SNAP)
+            {
+                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
+            }
+        }
+        else
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out =
+                chassis_slew_limit(vy_set_channel,
+                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out,
+                                   CHASSIS_VY_ACC_UP,
+                                   CHASSIS_VY_ACC_DOWN,
+                                   CHASSIS_CONTROL_TIME);
+        }
+    }
 
     *vx_set = chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out;
     *vy_set = chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out;
@@ -908,6 +973,17 @@ static void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
         if (chassis_motor_is_lost(i))
         {
             PID_clear(&chassis_move_control_loop->motor_speed_pid[i]);
+            chassis_move_control_loop->motor_chassis[i].feedforward_current = 0.0f;
+            chassis_move_control_loop->motor_chassis[i].current_set = 0.0f;
+            continue;
+        }
+
+        if (fabsf(chassis_move_control_loop->motor_chassis[i].speed_set) < CHASSIS_STOP_SPEED_SET_DEADBAND &&
+            fabsf(chassis_move_control_loop->motor_chassis[i].speed) < CHASSIS_STOP_SPEED_FEEDBACK_DEADBAND)
+        {
+            PID_clear(&chassis_move_control_loop->motor_speed_pid[i]);
+            chassis_move_control_loop->motor_chassis[i].speed_set = 0.0f;
+            chassis_move_control_loop->motor_chassis[i].speed_set_last = 0.0f;
             chassis_move_control_loop->motor_chassis[i].feedforward_current = 0.0f;
             chassis_move_control_loop->motor_chassis[i].current_set = 0.0f;
             continue;

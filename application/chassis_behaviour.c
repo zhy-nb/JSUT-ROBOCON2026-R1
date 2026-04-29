@@ -11,6 +11,7 @@
 #include "detect_task.h"
 
 #include <stddef.h>
+#include <math.h>
 
 static uint8_t chassis_behaviour_lost_motor_count(void);
 static chassis_behaviour_e chassis_behaviour_get_auto_mode(void);
@@ -85,7 +86,7 @@ static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo)
     fp32 expo_ratio = 0.0f;
     fp32 output = 0.0f;
 
-    if (channel > -deadband && channel < deadband)
+    if (channel >= -deadband && channel <= deadband)
     {
         return 0.0f;
     }
@@ -231,12 +232,28 @@ static fp32 chassis_drive_get_wz_set(chassis_move_t *chassis_move_rc_to_vector)
                                           CHASSIS_RC_EXPO);
     wz_target = (-CHASSIS_WZ_RC_SEN) * (wz_normalized * 660.0f);
 
-    chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out =
-        chassis_slew_limit_local(wz_target,
-                                 chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out,
-                                 CHASSIS_WZ_ACC_UP,
-                                 CHASSIS_WZ_ACC_DOWN,
-                                 CHASSIS_CONTROL_TIME);
+    if (wz_normalized == 0.0f)
+    {
+        chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out =
+            chassis_slew_limit_local(0.0f,
+                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out,
+                                     CHASSIS_WZ_ZERO_DEC,
+                                     CHASSIS_WZ_ZERO_DEC,
+                                     CHASSIS_CONTROL_TIME);
+        if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out) < CHASSIS_WZ_ZERO_SNAP)
+        {
+            chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out = 0.0f;
+        }
+    }
+    else
+    {
+        chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out =
+            chassis_slew_limit_local(wz_target,
+                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out,
+                                     CHASSIS_WZ_ACC_UP,
+                                     CHASSIS_WZ_ACC_DOWN,
+                                     CHASSIS_CONTROL_TIME);
+    }
 
     return chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out;
 }
