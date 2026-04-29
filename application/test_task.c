@@ -18,6 +18,8 @@
   * Display policy:
   *   - RC OK + motors OK:
   *       LED solid green; buzzer beeps once for 500 ms when entering this state.
+  *   - RC OK + motors OK + suspected wheel slip / hub loose:
+  *       LED triple yellow short flashes; buzzer triple high-pitch short beeps.
   *   - RC lost + motors lost:
   *       LED solid red; buzzer keeps on.
   *   - Motors OK + RC lost:
@@ -57,6 +59,7 @@
 #include "cmsis_os.h"
 #include "bsp_buzzer.h"
 #include "bsp_led.h"
+#include "chassis_task.h"
 #include "detect_task.h"
 
 #if 0
@@ -163,9 +166,17 @@ static void buzzer_warn_error(uint8_t num)
 
 #define STATUS_LED_RED                     0xFFFF0000U
 #define STATUS_LED_GREEN                   0xFF00FF00U
+#define STATUS_LED_YELLOW                  0xFFFFFF00U
 #define STATUS_LED_OFF                     0x00000000U
 
 #define STATUS_SUCCESS_BEEP_MS             500U
+#define STATUS_MECH_LED_PERIOD_MS          900U
+#define STATUS_MECH_LED_ON_MS              80U
+#define STATUS_MECH_LED_STEP_MS            160U
+#define STATUS_MECH_BEEP_PERIOD_MS         900U
+#define STATUS_MECH_BEEP_ON_MS             50U
+#define STATUS_MECH_BEEP_STEP_MS           120U
+#define STATUS_MECH_BUZZER_PSC             3U
 #define STATUS_MOTOR_ONLY_LED_TOGGLE_MS    250U
 #define STATUS_MOTOR_ONLY_BEEP_PERIOD_MS   500U
 #define STATUS_MOTOR_ONLY_BEEP_ON_MS       100U
@@ -176,6 +187,7 @@ static void buzzer_warn_error(uint8_t num)
 typedef enum
 {
     CONNECTION_STATE_ALL_OK = 0,
+    CONNECTION_STATE_MECH_FAULT,
     CONNECTION_STATE_NONE_OK,
     CONNECTION_STATE_MOTOR_ONLY,
     CONNECTION_STATE_REMOTE_ONLY,
@@ -209,6 +221,11 @@ static connection_state_e connection_status_get_state(void)
 
     if (motors_ok && remote_ok)
     {
+        if (chassis_mech_fault_is_active() != 0U)
+        {
+            return CONNECTION_STATE_MECH_FAULT;
+        }
+
         return CONNECTION_STATE_ALL_OK;
     }
 
@@ -232,6 +249,25 @@ static void connection_status_apply_led(connection_state_e state, uint32_t state
         case CONNECTION_STATE_ALL_OK:
         {
             aRGB_led_show(STATUS_LED_GREEN);
+            break;
+        }
+
+        case CONNECTION_STATE_MECH_FAULT:
+        {
+            uint32_t phase = state_time_ms % STATUS_MECH_LED_PERIOD_MS;
+
+            if ((phase < STATUS_MECH_LED_ON_MS) ||
+                (phase >= STATUS_MECH_LED_STEP_MS &&
+                 phase < (STATUS_MECH_LED_STEP_MS + STATUS_MECH_LED_ON_MS)) ||
+                (phase >= (STATUS_MECH_LED_STEP_MS * 2U) &&
+                 phase < ((STATUS_MECH_LED_STEP_MS * 2U) + STATUS_MECH_LED_ON_MS)))
+            {
+                aRGB_led_show(STATUS_LED_YELLOW);
+            }
+            else
+            {
+                aRGB_led_show(STATUS_LED_OFF);
+            }
             break;
         }
 
@@ -281,6 +317,25 @@ static void connection_status_apply_buzzer(connection_state_e state,
             if (success_beep_left_ms > 0U)
             {
                 buzzer_on(STATUS_BUZZER_PSC, STATUS_BUZZER_PWM);
+            }
+            else
+            {
+                buzzer_off();
+            }
+            break;
+        }
+
+        case CONNECTION_STATE_MECH_FAULT:
+        {
+            uint32_t phase = state_time_ms % STATUS_MECH_BEEP_PERIOD_MS;
+
+            if ((phase < STATUS_MECH_BEEP_ON_MS) ||
+                (phase >= STATUS_MECH_BEEP_STEP_MS &&
+                 phase < (STATUS_MECH_BEEP_STEP_MS + STATUS_MECH_BEEP_ON_MS)) ||
+                (phase >= (STATUS_MECH_BEEP_STEP_MS * 2U) &&
+                 phase < ((STATUS_MECH_BEEP_STEP_MS * 2U) + STATUS_MECH_BEEP_ON_MS)))
+            {
+                buzzer_on(STATUS_MECH_BUZZER_PSC, STATUS_BUZZER_PWM);
             }
             else
             {

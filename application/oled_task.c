@@ -38,6 +38,7 @@ void oled_task(void const *argument)
     char line_text[22];
     uint8_t motor_lost_mask = 0;
     uint8_t rc_lost = 0;
+    chassis_mech_fault_e mech_fault = CHASSIS_MECH_FAULT_NONE;
 
     (void)argument;
 
@@ -55,10 +56,31 @@ void oled_task(void const *argument)
     {
         motor_lost_mask = oled_get_motor_lost_mask();
         rc_lost = toe_is_error(DBUS_TOE);
+        mech_fault = chassis_get_mech_fault();
 
         oled_ssd1306_clear();
 
-        if (oled_is_all_connected(motor_lost_mask, rc_lost) != 0U)
+        if (chassis_mech_fault_is_active() != 0U)
+        {
+            if (mech_fault == CHASSIS_MECH_FAULT_HUB_LOOSE)
+            {
+                oled_ssd1306_write_string(0, 0, "HUB LOOSE");
+                oled_ssd1306_write_string(0, 16, "CHECK HUB");
+            }
+            else
+            {
+                oled_ssd1306_write_string(0, 0, "WHEEL SLIP");
+                oled_ssd1306_write_string(0, 16, "CHECK WHEEL");
+            }
+
+            oled_format_voltage_total_current_line(line_text,
+                                                   power_monitor_get_battery_voltage(),
+                                                   oled_get_total_motor_current_x10());
+            oled_ssd1306_write_string(0, 32, line_text);
+
+            oled_ssd1306_write_string(0, 48, "MODE DRV DEG MECH");
+        }
+        else if (oled_is_all_connected(motor_lost_mask, rc_lost) != 0U)
         {
             oled_ssd1306_write_string(0, 0, "CONNECT OK");
 

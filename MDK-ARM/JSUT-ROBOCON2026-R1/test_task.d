@@ -55,4 +55,10 @@ jsut-robocon2026-r1\test_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/incl
 jsut-robocon2026-r1\test_task.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h
 jsut-robocon2026-r1\test_task.o: ../bsp/boards/bsp_buzzer.h
 jsut-robocon2026-r1\test_task.o: ../bsp/boards/bsp_led.h
+jsut-robocon2026-r1\test_task.o: ..\application\chassis_task.h
+jsut-robocon2026-r1\test_task.o: ..\application\CAN_receive.h
+jsut-robocon2026-r1\test_task.o: ../components/controller/pid.h
+jsut-robocon2026-r1\test_task.o: ..\application\remote_control.h
+jsut-robocon2026-r1\test_task.o: ../bsp/boards/bsp_rc.h
+jsut-robocon2026-r1\test_task.o: ../components/algorithm/user_lib.h
 jsut-robocon2026-r1\test_task.o: ..\application\detect_task.h

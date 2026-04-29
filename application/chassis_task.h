@@ -40,7 +40,7 @@
 
 /* ----------------------- RC Feel Parameters ------------------------------ */
 #define CHASSIS_RC_SLOW_SEN 0.80f
-#define CHASSIS_RC_DEADLINE_LOCAL 15
+#define CHASSIS_RC_DEADLINE_LOCAL 25
 #define CHASSIS_RC_EXPO 0.30f
 
 #define CHASSIS_VX_ACC_UP 1.8f
@@ -57,6 +57,12 @@
 #define CHASSIS_TRANSLATION_ZERO_DEC 6.0f
 #define CHASSIS_CMD_ZERO_SNAP 0.02f
 #define CHASSIS_WZ_ZERO_SNAP 0.05f
+
+#define CHASSIS_STOP_COMMAND_DEADBAND 0.015f
+#define CHASSIS_STOP_WZ_DEADBAND 0.04f
+#define CHASSIS_STOP_LOCK_SPEED_DEADBAND 0.015f
+#define CHASSIS_STOP_DAMPING_KP 3500.0f
+#define CHASSIS_STOP_DAMPING_MAX_CURRENT 2500.0f
 
 #define CHASSIS_STOP_SPEED_SET_DEADBAND 0.02f
 #define CHASSIS_STOP_SPEED_FEEDBACK_DEADBAND 0.03f
@@ -95,6 +101,20 @@
 #define CHASSIS_SINGLE_MOTOR_LOST_TRANSLATION_SCALE 0.45f
 #define CHASSIS_SINGLE_MOTOR_LOST_WZ_LIMIT_SCALE 0.25f
 
+/* Mechanical abnormal detection:
+ * - Detects wheel slip / hub looseness by comparing wheel-feedback motion
+ *   with IMU response under high motor feedback current.
+ * - It reuses the single-motor degraded speed limits after trigger.
+ */
+#define CHASSIS_MECH_CURRENT_HIGH_RAW 1800.0f
+#define CHASSIS_MECH_TRANSLATION_SPEED_MIN 0.35f
+#define CHASSIS_MECH_TRANSLATION_ACCEL_MIN 0.70f
+#define CHASSIS_MECH_IMU_ACCEL_MIN 0.30f
+#define CHASSIS_MECH_WZ_SPEED_MIN 0.70f
+#define CHASSIS_MECH_GYRO_MISMATCH_MIN 0.45f
+#define CHASSIS_MECH_DETECT_COUNT 125U
+#define CHASSIS_MECH_CLEAR_COUNT 500U
+
 #define SWING_NO_MOVE_ANGLE 0.7f
 #define SWING_MOVE_ANGLE 0.31415926535897932384626433832795f
 
@@ -125,6 +145,39 @@ typedef enum
     CHASSIS_VECTOR_DRIVE,
     CHASSIS_VECTOR_RAW,
 } chassis_mode_e;
+
+/**
+  * @brief  Mechanical abnormal state for wheel slip / hub looseness.
+  */
+typedef enum
+{
+    CHASSIS_MECH_FAULT_NONE = 0,
+    CHASSIS_MECH_FAULT_WHEEL_SLIP,
+    CHASSIS_MECH_FAULT_HUB_LOOSE,
+} chassis_mech_fault_e;
+
+/**
+  * @brief  Chassis odometry state integrated from wheel feedback and IMU yaw.
+  */
+typedef struct
+{
+    fp32 x;
+    fp32 y;
+    fp32 theta;
+    fp32 mileage;
+    fp32 yaw_mileage;
+} chassis_odometry_t;
+
+/**
+  * @brief  Mechanical abnormal detector state.
+  */
+typedef struct
+{
+    chassis_mech_fault_e fault;
+    uint8_t active;
+    uint16_t suspect_count;
+    uint16_t clear_count;
+} chassis_mech_fault_state_t;
 
 /**
   * @brief  Runtime state for a single chassis motor.
@@ -163,6 +216,9 @@ typedef struct
     fp32 vy;
     fp32 wz;
 
+    chassis_odometry_t odom;
+    chassis_mech_fault_state_t mech_fault;
+
     fp32 vx_set;
     fp32 vy_set;
     fp32 wz_set;
@@ -197,5 +253,30 @@ extern void chassis_task(void const *pvParameters);
 extern void chassis_rc_to_control_vector(fp32 *vx_set,
                                          fp32 *vy_set,
                                          chassis_move_t *chassis_move_rc_to_vector);
+
+/**
+  * @brief  Get readonly chassis odometry state.
+  */
+extern const chassis_odometry_t *chassis_get_odometry_point(void);
+
+/**
+  * @brief  Reset chassis odometry pose.
+  */
+extern void chassis_odometry_reset(fp32 x, fp32 y, fp32 theta);
+
+/**
+  * @brief  Get current mechanical abnormal detector state.
+  */
+extern const chassis_mech_fault_state_t *chassis_get_mech_fault_state(void);
+
+/**
+  * @brief  Return non-zero if wheel slip / hub looseness is suspected.
+  */
+extern uint8_t chassis_mech_fault_is_active(void);
+
+/**
+  * @brief  Get current mechanical abnormal type.
+  */
+extern chassis_mech_fault_e chassis_get_mech_fault(void);
 
 #endif
