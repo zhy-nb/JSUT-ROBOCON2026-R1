@@ -1,3 +1,16 @@
+/**
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  * @file       chassis_fault.c
+  * @brief      Chassis fault detection and degraded-control implementation.
+  * @brief      底盘故障检测与降级控制模块实现。
+  * @note       Centralizes motor-loss judgement, three-wheel degraded feedback,
+  *             wheel slip / hub looseness suspicion, and degraded command
+  *             limiting. The control layer only consumes the final strategy.
+  * @note       集中处理电机掉线判断、三轮容错反馈、疑似轮子打滑 /
+  *             法兰松动检测以及降级指令限幅。控制层只使用最终策略。
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  */
+
 #include "chassis_fault.h"
 
 #include "INS_task.h"
@@ -8,6 +21,10 @@
 
 static chassis_move_t *chassis_fault_owner = NULL;
 static const chassis_mech_fault_state_t chassis_empty_fault = {CHASSIS_MECH_FAULT_NONE, 0U, 0U, 0U};
+
+/* Map chassis motor index [0..3] to the unified detect_task TOE id.
+ * 将底盘电机编号 [0..3] 映射到 detect_task 中统一使用的 TOE 编号。
+ */
 static const uint8_t chassis_motor_toe[4] = {
     CHASSIS_MOTOR1_TOE,
     CHASSIS_MOTOR2_TOE,
@@ -24,11 +41,25 @@ static uint8_t chassis_solve_linear_3x3(fp32 matrix_in[3][3],
 static void chassis_fault_reset_motion_command(chassis_move_t *chassis_move_control);
 static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_move_control);
 
+/**
+  * @brief  Bind the runtime chassis object used by fault query APIs.
+  * @brief  绑定故障查询接口使用的底盘运行状态结构体。
+  * @param[in] chassis_move_control Chassis runtime object.
+  * @param[in] chassis_move_control 底盘运行状态结构体。
+  */
 void chassis_fault_bind(chassis_move_t *chassis_move_control)
 {
     chassis_fault_owner = chassis_move_control;
 }
 
+/**
+  * @brief  Decide whether chassis startup must wait.
+  * @brief  判断底盘启动是否必须继续等待。
+  * @retval 0 Required devices are online.
+  * @retval 1 Detect task, RC or any chassis motor is not ready.
+  * @retval 0 关键设备均已在线。
+  * @retval 1 检测任务、遥控器或任一底盘电机尚未就绪。
+  */
 uint8_t chassis_startup_blocked(void)
 {
     return (uint8_t)(!detect_task_is_inited() ||
@@ -39,6 +70,16 @@ uint8_t chassis_startup_blocked(void)
                      toe_is_error(DBUS_TOE));
 }
 
+/**
+  * @brief  Check if one chassis motor is lost.
+  * @brief  判断指定底盘电机是否掉线。
+  * @param[in] motor_index Motor index, range 0 to 3.
+  * @param[in] motor_index 电机编号，范围 0 到 3。
+  * @retval 0 Motor is online.
+  * @retval 1 Motor is lost, or index is invalid.
+  * @retval 0 电机在线。
+  * @retval 1 电机掉线或编号非法。
+  */
 uint8_t chassis_motor_is_lost(uint8_t motor_index)
 {
     if (motor_index >= 4U)
@@ -49,6 +90,12 @@ uint8_t chassis_motor_is_lost(uint8_t motor_index)
     return (uint8_t)toe_is_error(chassis_motor_toe[motor_index]);
 }
 
+/**
+  * @brief  Count current lost chassis motors.
+  * @brief  统计当前掉线的底盘电机数量。
+  * @retval Lost motor count.
+  * @retval 掉线电机数量。
+  */
 uint8_t chassis_lost_motor_count(void)
 {
     uint8_t count = 0U;
@@ -65,6 +112,14 @@ uint8_t chassis_lost_motor_count(void)
     return count;
 }
 
+/**
+  * @brief  Return the lost motor index only in single-motor-loss state.
+  * @brief  仅在单电机掉线状态下返回掉线电机编号。
+  * @retval 0..3 Lost motor index.
+  * @retval 0xFF No motor is lost or multiple motors are lost.
+  * @retval 0..3 掉线电机编号。
+  * @retval 0xFF 没有电机掉线或多个电机掉线。
+  */
 uint8_t chassis_get_single_lost_motor_index(void)
 {
     uint8_t i = 0U;
@@ -88,6 +143,29 @@ uint8_t chassis_get_single_lost_motor_index(void)
     return lost_index;
 }
 
+/**
+  * @brief  Reconstruct body velocity from the three healthy wheel speeds.
+  * @brief  通过三个健康轮子的速度反馈重构底盘速度。
+  *
+  * @param[in]  chassis_move_control Chassis runtime object.
+  * @param[in]  lost_motor_index Lost motor index.
+  * @param[out] vx Solved chassis X velocity.
+  * @param[out] vy Solved chassis Y velocity.
+  * @param[out] wz Solved chassis yaw rate.
+  * @param[in]  chassis_move_control 底盘运行状态结构体。
+  * @param[in]  lost_motor_index 掉线电机编号。
+  * @param[out] vx 解算出的底盘 X 方向速度。
+  * @param[out] vy 解算出的底盘 Y 方向速度。
+  * @param[out] wz 解算出的底盘旋转角速度。
+  * @retval 0 Matrix solve failed.
+  * @retval 1 Body velocity solved from healthy wheels.
+  * @retval 0 矩阵解算失败。
+  * @retval 1 成功通过健康轮反馈解算底盘速度。
+  *
+  * @note   Used only when exactly one wheel feedback is invalid. This keeps
+  *         odometry and fault judgement based on healthy wheel information.
+  * @note   仅在单个轮子反馈无效时使用，使里程计和故障判断尽量基于健康轮信息。
+  */
 uint8_t chassis_solve_body_vector_from_healthy_wheels(const chassis_move_t *chassis_move_control,
                                                       uint8_t lost_motor_index,
                                                       fp32 *vx,
@@ -128,6 +206,19 @@ uint8_t chassis_solve_body_vector_from_healthy_wheels(const chassis_move_t *chas
     return 1U;
 }
 
+/**
+  * @brief  Apply high-level degraded strategy to command targets.
+  * @brief  对底盘速度目标应用上层降级策略。
+  *
+  * @param[in,out] chassis_move_control Chassis runtime object.
+  * @param[in,out] chassis_move_control 底盘运行状态结构体。
+  *
+  * @note   RC lost or two-or-more motor loss resets all commands to zero.
+  *         Single motor loss and mechanical abnormal share the same limited
+  *         degraded motion policy.
+  * @note   遥控器掉线或两个及以上底盘电机掉线时，所有运动指令归零。
+  *         单电机掉线和机械异常复用同一套低速限幅降级策略。
+  */
 void chassis_fault_apply_strategy(chassis_move_t *chassis_move_control)
 {
     uint8_t lost_motor_count = 0U;
@@ -151,6 +242,12 @@ void chassis_fault_apply_strategy(chassis_move_t *chassis_move_control)
     }
 }
 
+/**
+  * @brief  Clear mechanical abnormal detector state.
+  * @brief  清除机械异常检测器状态。
+  * @param[in,out] chassis_move_control Chassis runtime object.
+  * @param[in,out] chassis_move_control 底盘运行状态结构体。
+  */
 void chassis_mech_fault_reset(chassis_move_t *chassis_move_control)
 {
     if (chassis_move_control == NULL)
@@ -164,6 +261,20 @@ void chassis_mech_fault_reset(chassis_move_t *chassis_move_control)
     chassis_move_control->mech_fault.clear_count = 0U;
 }
 
+/**
+  * @brief  Update wheel slip / hub looseness suspicion.
+  * @brief  更新疑似轮子打滑 / 法兰松动状态。
+  *
+  * @param[in,out] chassis_move_update Chassis runtime object.
+  * @param[in,out] chassis_move_update 底盘运行状态结构体。
+  *
+  * @note   A fault is suspected only when motor feedback current is high while
+  *         wheel-feedback motion and IMU response disagree for a continuous
+  *         number of control cycles. This is a conservative detector, not a
+  *         direct physical measurement of the wheel hub.
+  * @note   只有在电机反馈电流较高，同时轮速反馈运动和 IMU 响应连续不匹配时，
+  *         才会判定疑似机械异常。这是保守检测，不是对法兰或轮子的直接测量。
+  */
 void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
 {
     static fp32 last_vx = 0.0f;
@@ -252,6 +363,12 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
     last_vy = chassis_move_update->vy;
 }
 
+/**
+  * @brief  Get current mechanical abnormal detector state.
+  * @brief  获取当前机械异常检测器状态。
+  * @retval Readonly pointer to the detector state.
+  * @retval 指向检测器状态的只读指针。
+  */
 const chassis_mech_fault_state_t *chassis_get_mech_fault_state(void)
 {
     if (chassis_fault_owner == NULL)
@@ -262,6 +379,14 @@ const chassis_mech_fault_state_t *chassis_get_mech_fault_state(void)
     return &chassis_fault_owner->mech_fault;
 }
 
+/**
+  * @brief  Return whether mechanical abnormal state is active.
+  * @brief  返回机械异常状态是否已经激活。
+  * @retval 0 No active mechanical abnormal.
+  * @retval 1 Wheel slip or hub looseness is suspected.
+  * @retval 0 当前没有机械异常。
+  * @retval 1 当前疑似轮子打滑或法兰松动。
+  */
 uint8_t chassis_mech_fault_is_active(void)
 {
     if (chassis_fault_owner == NULL)
@@ -272,6 +397,16 @@ uint8_t chassis_mech_fault_is_active(void)
     return chassis_fault_owner->mech_fault.active;
 }
 
+/**
+  * @brief  Get current mechanical abnormal type.
+  * @brief  获取当前机械异常类型。
+  * @retval CHASSIS_MECH_FAULT_NONE No mechanical abnormal.
+  * @retval CHASSIS_MECH_FAULT_WHEEL_SLIP Wheel slip is suspected.
+  * @retval CHASSIS_MECH_FAULT_HUB_LOOSE Hub looseness is suspected.
+  * @retval CHASSIS_MECH_FAULT_NONE 无机械异常。
+  * @retval CHASSIS_MECH_FAULT_WHEEL_SLIP 疑似轮子打滑。
+  * @retval CHASSIS_MECH_FAULT_HUB_LOOSE 疑似法兰松动。
+  */
 chassis_mech_fault_e chassis_get_mech_fault(void)
 {
     if (chassis_fault_owner == NULL)
@@ -282,6 +417,14 @@ chassis_mech_fault_e chassis_get_mech_fault(void)
     return chassis_fault_owner->mech_fault.fault;
 }
 
+/**
+  * @brief  Calculate average absolute motor feedback current.
+  * @brief  计算底盘电机反馈电流绝对值平均值。
+  * @param[in] chassis_move_control Chassis runtime object.
+  * @param[in] chassis_move_control 底盘运行状态结构体。
+  * @retval Average absolute C620 feedback current raw value.
+  * @retval C620 反馈电流原始值的绝对值平均值。
+  */
 static fp32 chassis_get_average_feedback_current_abs(const chassis_move_t *chassis_move_control)
 {
     uint8_t i = 0U;
@@ -300,6 +443,14 @@ static fp32 chassis_get_average_feedback_current_abs(const chassis_move_t *chass
     return current_sum * 0.25f;
 }
 
+/**
+  * @brief  Get yaw-rate kinematic radius for the selected wheel.
+  * @brief  获取指定轮子用于旋转解算的等效半径。
+  * @param[in] motor_index Motor index, range 0 to 3.
+  * @param[in] motor_index 电机编号，范围 0 到 3。
+  * @retval Wheel yaw radius used by mecanum kinematics.
+  * @retval 麦轮运动学中使用的旋转等效半径。
+  */
 static fp32 chassis_get_motor_wz_radius(uint8_t motor_index)
 {
     if (motor_index < 2U)
@@ -310,6 +461,14 @@ static fp32 chassis_get_motor_wz_radius(uint8_t motor_index)
     return CHASSIS_REAR_WZ_RADIUS;
 }
 
+/**
+  * @brief  Build one wheel kinematic equation row.
+  * @brief  构造单个轮子的运动学方程行。
+  * @param[in]  motor_index Motor index, range 0 to 3.
+  * @param[out] row Equation row for vx / vy / wz.
+  * @param[in]  motor_index 电机编号，范围 0 到 3。
+  * @param[out] row 对应 vx / vy / wz 的方程行。
+  */
 static void chassis_get_wheel_kinematic_row(uint8_t motor_index, fp32 row[3])
 {
     const fp32 wz_radius = chassis_get_motor_wz_radius(motor_index);
@@ -363,6 +522,20 @@ static void chassis_get_wheel_kinematic_row(uint8_t motor_index, fp32 row[3])
     }
 }
 
+/**
+  * @brief  Solve a 3x3 linear system by Gaussian elimination.
+  * @brief  使用高斯消元求解 3x3 线性方程组。
+  * @param[in]  matrix_in 3x3 coefficient matrix.
+  * @param[in]  vector_in 3x1 right-hand vector.
+  * @param[out] solution Solved 3x1 result.
+  * @param[in]  matrix_in 3x3 系数矩阵。
+  * @param[in]  vector_in 3x1 右端向量。
+  * @param[out] solution 解算结果。
+  * @retval 0 Singular matrix or invalid input.
+  * @retval 1 Solve succeeded.
+  * @retval 0 矩阵奇异或输入非法。
+  * @retval 1 解算成功。
+  */
 static uint8_t chassis_solve_linear_3x3(fp32 matrix_in[3][3],
                                         fp32 vector_in[3],
                                         fp32 solution[3])
@@ -458,6 +631,12 @@ static uint8_t chassis_solve_linear_3x3(fp32 matrix_in[3][3],
     return 1U;
 }
 
+/**
+  * @brief  Reset all chassis motion targets and wheel-control memory.
+  * @brief  复位所有底盘运动目标和轮速控制记忆。
+  * @param[in,out] chassis_move_control Chassis runtime object.
+  * @param[in,out] chassis_move_control 底盘运行状态结构体。
+  */
 static void chassis_fault_reset_motion_command(chassis_move_t *chassis_move_control)
 {
     uint8_t i = 0U;
@@ -486,6 +665,19 @@ static void chassis_fault_reset_motion_command(chassis_move_t *chassis_move_cont
     }
 }
 
+/**
+  * @brief  Limit command targets for degraded driving.
+  * @brief  对降级驾驶状态下的速度指令进行限幅。
+  *
+  * @param[in,out] chassis_move_control Chassis runtime object.
+  * @param[in,out] chassis_move_control 底盘运行状态结构体。
+  *
+  * @note   This does not stop the robot immediately. It keeps low-speed
+  *         translation and bounded yaw so the robot can still leave danger
+  *         or finish a short recovery action.
+  * @note   该策略不会直接停车，而是保留低速平移和受限旋转能力，
+  *         方便机器人脱困或完成短距离恢复动作。
+  */
 static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_move_control)
 {
     fp32 translation_scale = 1.0f;

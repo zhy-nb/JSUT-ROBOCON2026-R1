@@ -2,9 +2,13 @@
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       chassis_task.c
   * @brief      Chassis task orchestration and RC command mapping.
+  * @brief      底盘任务编排与遥控输入映射。
   * @note       The heavy logic is split into chassis_control, chassis_fault,
   *             chassis_odometry, and chassis_power. This file keeps task flow,
   *             mode transition, feedback update, and RC input shaping.
+  * @note       重逻辑已经拆分到 chassis_control、chassis_fault、
+  *             chassis_odometry 和 chassis_power。本文件只保留任务流程、
+  *             模式切换、反馈更新和遥控输入整形。
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
@@ -37,6 +41,18 @@ uint32_t chassis_high_water;
 
 static chassis_move_t chassis_move;
 
+/**
+  * @brief  Chassis control task entry.
+  * @brief  底盘控制任务入口。
+  *
+  * @param[in] pvParameters FreeRTOS task parameter, unused.
+  * @param[in] pvParameters FreeRTOS 任务参数，未使用。
+  *
+  * @note   Task order is fixed: mode update -> transition -> feedback ->
+  *         target command -> wheel control -> CAN current output.
+  * @note   任务顺序固定为：模式更新 -> 模式切换处理 -> 反馈更新 ->
+  *         目标指令生成 -> 轮速控制 -> CAN 电流输出。
+  */
 void chassis_task(void const *pvParameters)
 {
     (void)pvParameters;
@@ -66,6 +82,23 @@ void chassis_task(void const *pvParameters)
     }
 }
 
+/**
+  * @brief  Convert DT7 translational channels into chassis vx/vy targets.
+  * @brief  将 DT7 平移通道转换为底盘 vx/vy 目标。
+  *
+  * @param[out] vx_set Chassis X velocity target.
+  * @param[out] vy_set Chassis Y velocity target.
+  * @param[in,out] chassis_move_rc_to_vector Chassis runtime object.
+  * @param[out] vx_set 底盘 X 方向速度目标。
+  * @param[out] vy_set 底盘 Y 方向速度目标。
+  * @param[in,out] chassis_move_rc_to_vector 底盘运行状态结构体。
+  *
+  * @note   Processing order: deadband -> expo curve -> sensitivity scaling
+  *         -> slew limit -> zero snap. This keeps joystick return-to-center
+  *         smooth without allowing long residual drift.
+  * @note   处理顺序为：死区 -> 指数曲线 -> 灵敏度缩放 -> 斜坡限幅
+  *         -> 零点吸附。这样能让摇杆回中更柔和，同时避免长时间残余漂移。
+  */
 void chassis_rc_to_control_vector(fp32 *vx_set, fp32 *vy_set, chassis_move_t *chassis_move_rc_to_vector)
 {
     int16_t vx_channel = 0;
@@ -173,6 +206,12 @@ void chassis_rc_to_control_vector(fp32 *vx_set, fp32 *vy_set, chassis_move_t *ch
     *vy_set = chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out;
 }
 
+/**
+  * @brief  Initialize chassis runtime state, motor PID and filters.
+  * @brief  初始化底盘运行状态、电机 PID 和输入滤波器。
+  * @param[in,out] chassis_move_init Chassis runtime object.
+  * @param[in,out] chassis_move_init 底盘运行状态结构体。
+  */
 static void chassis_init(chassis_move_t *chassis_move_init)
 {
     static const fp32 motor_speed_pid[3] = {
@@ -236,6 +275,12 @@ static void chassis_init(chassis_move_t *chassis_move_init)
     chassis_feedback_update(chassis_move_init);
 }
 
+/**
+  * @brief  Synchronize chassis mode from behaviour layer.
+  * @brief  从行为层同步当前底盘模式。
+  * @param[in,out] chassis_move_mode Chassis runtime object.
+  * @param[in,out] chassis_move_mode 底盘运行状态结构体。
+  */
 static void chassis_set_mode(chassis_move_t *chassis_move_mode)
 {
     if (chassis_move_mode == NULL)
@@ -246,6 +291,12 @@ static void chassis_set_mode(chassis_move_t *chassis_move_mode)
     chassis_behaviour_mode_set(chassis_move_mode);
 }
 
+/**
+  * @brief  Handle state changes when chassis mode switches.
+  * @brief  处理底盘模式切换时的状态过渡。
+  * @param[in,out] chassis_move_transit Chassis runtime object.
+  * @param[in,out] chassis_move_transit 底盘运行状态结构体。
+  */
 static void chassis_mode_change_control_transit(chassis_move_t *chassis_move_transit)
 {
     if (chassis_move_transit == NULL)
@@ -261,6 +312,19 @@ static void chassis_mode_change_control_transit(chassis_move_t *chassis_move_tra
     chassis_move_transit->last_chassis_mode = chassis_move_transit->chassis_mode;
 }
 
+/**
+  * @brief  Update wheel feedback, body velocity and IMU attitude.
+  * @brief  更新轮速反馈、底盘速度反馈和 IMU 姿态反馈。
+  *
+  * @param[in,out] chassis_move_update Chassis runtime object.
+  * @param[in,out] chassis_move_update 底盘运行状态结构体。
+  *
+  * @note   Single-motor-loss feedback uses the three healthy wheels. Normal
+  *         feedback uses all four wheel speeds. Odometry and mechanical fault
+  *         detection are updated after feedback velocity is ready.
+  * @note   单电机掉线时使用三个健康轮子重解算反馈速度；正常情况下使用
+  *         四轮速度反馈。里程计和机械异常检测会在速度反馈更新后执行。
+  */
 static void chassis_feedback_update(chassis_move_t *chassis_move_update)
 {
     const fp32 *ins_angle = NULL;
@@ -320,6 +384,18 @@ static void chassis_feedback_update(chassis_move_t *chassis_move_update)
     chassis_mech_fault_update(chassis_move_update);
 }
 
+/**
+  * @brief  Generate final vx / vy / wz targets for the control module.
+  * @brief  为控制模块生成最终 vx / vy / wz 目标。
+  *
+  * @param[in,out] chassis_move_control Chassis runtime object.
+  * @param[in,out] chassis_move_control 底盘运行状态结构体。
+  *
+  * @note   Behaviour layer gives the raw target. This function constrains it
+  *         by mode limits and then applies fault/degraded strategy.
+  * @note   行为层给出原始目标，本函数先按模式限制目标，再应用故障 /
+  *         降级策略。
+  */
 static void chassis_set_control(chassis_move_t *chassis_move_control)
 {
     fp32 vx_set = 0.0f;
@@ -358,6 +434,16 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
     chassis_fault_apply_strategy(chassis_move_control);
 }
 
+/**
+  * @brief  Apply symmetric deadband to an RC channel.
+  * @brief  对遥控器通道应用对称死区。
+  * @param[in] input Raw centered RC channel.
+  * @param[in] deadband Deadband threshold.
+  * @param[in] input 已居中的遥控器原始通道值。
+  * @param[in] deadband 死区阈值。
+  * @retval Filtered channel value.
+  * @retval 死区处理后的通道值。
+  */
 static int16_t chassis_apply_deadband(int16_t input, int16_t deadband)
 {
     if (input > deadband || input < -deadband)
@@ -368,6 +454,18 @@ static int16_t chassis_apply_deadband(int16_t input, int16_t deadband)
     return 0;
 }
 
+/**
+  * @brief  Apply exponential curve to a centered RC channel.
+  * @brief  对居中的遥控器通道应用指数曲线。
+  * @param[in] input Raw centered RC channel.
+  * @param[in] deadband Deadband threshold.
+  * @param[in] expo Expo ratio, constrained internally.
+  * @param[in] input 已居中的遥控器原始通道值。
+  * @param[in] deadband 死区阈值。
+  * @param[in] expo 指数曲线比例，函数内部会限幅。
+  * @retval Normalized output in range [-1, 1].
+  * @retval 归一化输出，范围 [-1, 1]。
+  */
 static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo)
 {
     int16_t channel = input;
@@ -389,6 +487,22 @@ static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo)
     return fp32_constrain(output, -1.0f, 1.0f);
 }
 
+/**
+  * @brief  Limit target change rate.
+  * @brief  限制目标值变化速率。
+  * @param[in] target Desired value.
+  * @param[in] current Current filtered value.
+  * @param[in] acc_up Positive slew rate.
+  * @param[in] acc_down Negative slew rate.
+  * @param[in] dt Control period in seconds.
+  * @param[in] target 目标值。
+  * @param[in] current 当前滤波值。
+  * @param[in] acc_up 正方向变化速率。
+  * @param[in] acc_down 负方向变化速率。
+  * @param[in] dt 控制周期，单位秒。
+  * @retval Slew-limited next value.
+  * @retval 斜坡限幅后的下一周期值。
+  */
 static fp32 chassis_slew_limit(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt)
 {
     fp32 delta = target - current;
