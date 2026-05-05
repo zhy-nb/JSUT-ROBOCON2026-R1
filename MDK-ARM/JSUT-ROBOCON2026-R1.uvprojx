@@ -554,6 +554,26 @@
               <FilePath>..\application\chassis_behaviour.c</FilePath>
             </File>
             <File>
+              <FileName>chassis_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\chassis_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_fault.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\chassis_fault.c</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_odometry.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\chassis_odometry.c</FilePath>
+            </File>
+            <File>
+              <FileName>chassis_power.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\chassis_power.c</FilePath>
+            </File>
+            <File>
               <FileName>chassis_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\application\chassis_task.c</FilePath>

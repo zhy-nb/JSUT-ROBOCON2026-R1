@@ -1,0 +1,13 @@
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_control.c
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_control.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_task.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\struct_typedef.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\CAN_receive.h
+jsut-robocon2026-r1\chassis_control.o: ../components/controller/pid.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\remote_control.h
+jsut-robocon2026-r1\chassis_control.o: ../bsp/boards/bsp_rc.h
+jsut-robocon2026-r1\chassis_control.o: ../components/algorithm/user_lib.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_fault.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_power.h
+jsut-robocon2026-r1\chassis_control.o: D:\keil5\ARM\ARMCC\Bin\..\include\math.h
+jsut-robocon2026-r1\chassis_control.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h
