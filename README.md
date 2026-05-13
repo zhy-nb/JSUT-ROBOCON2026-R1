@@ -103,3 +103,16 @@
   - 修复 ARMCC5 下 3x3 解算函数参数类型不兼容 warning。
   - 为新拆分的 `.h` 和 `.c` 文件补充双语注释，包括 `@file`、`@brief`、`@note`、`@param` 和 `@retval`。
   - 保持原有底盘控制逻辑不变，仅调整代码结构和注释说明，便于后续维护与扩展。
+- 2026-05-13
+  - 新增统一底盘故障管理器，集中管理遥控器掉线、单电机掉线、多电机掉线、疑似轮子打滑、疑似法兰松动等故障。
+  - 增加故障分级、锁存、恢复判断、人工确认清除和故障历史记录机制。
+  - OLED 状态页接入统一故障状态，支持显示 `NORMAL`、`DEG 3W`、`DEG SLIP`、`DEG HUB`、`ACK SLIP`、`ACK HUB` 等状态。
+  - 增加 C 板 `KEY` 长按 1 秒确认清除锁存故障功能。
+  - 增加故障确认成功蜂鸣器提示音：成功解锁后输出两声短鸣。
+  - 新增 `chassis_trajectory` 轨迹规划模块，对 `vx / vy / wz` 进行加速度和 jerk 限制。
+  - 将摇杆输入与底盘轨迹规划解耦，摇杆只生成原始期望速度，最终速度由轨迹规划模块统一平滑处理。
+  - 增加轻量负载识别，根据电机反馈电流和轮速误差估算负载状态。
+  - 轮速前馈接入负载因子，重载时适当增加静摩擦补偿。
+  - 优化总电流限制策略，按各轮速度需求分配电流预算，再进行总电流兜底限幅。
+  - 重排 Keil 工程分组，按 `Startup`、`CubeMX/Core`、`BSP/Board`、`Application/System`、`Application/Communication`、`Application/Chassis`、`Application/UI_Status`、`Components/Devices`、`Components/Algorithm`、`Components/Controller` 分类。
+  - 补充 `oled_task`、`power_monitor`、`CAN_receive`、`struct_typedef`、`chassis_trajectory`、`oled_ssd1306` 等文件的中英文注释。
