@@ -17,6 +17,7 @@
 #include "chassis_control.h"
 #include "chassis_fault.h"
 #include "chassis_odometry.h"
+#include "chassis_trajectory.h"
 
 #include "arm_math.h"
 #include "INS_task.h"
@@ -27,7 +28,6 @@
 
 static int16_t chassis_apply_deadband(int16_t input, int16_t deadband);
 static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo);
-static fp32 chassis_slew_limit(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt);
 
 static void chassis_init(chassis_move_t *chassis_move_init);
 static void chassis_set_mode(chassis_move_t *chassis_move_mode);
@@ -93,9 +93,9 @@ void chassis_task(void const *pvParameters)
   * @param[out] vy_set 底盘 Y 方向速度目标。
   * @param[in,out] chassis_move_rc_to_vector 底盘运行状态结构体。
   *
-  * @note   Processing order: deadband -> expo curve -> sensitivity scaling
-  *         -> slew limit -> zero snap. This keeps joystick return-to-center
-  *         smooth without allowing long residual drift.
+  * @note   Processing order: deadband -> expo curve -> sensitivity scaling.
+  *         Acceleration and jerk planning are applied later by
+  *         chassis_trajectory_update().
   * @note   处理顺序为：死区 -> 指数曲线 -> 灵敏度缩放 -> 斜坡限幅
   *         -> 零点吸附。这样能让摇杆回中更柔和，同时避免长时间残余漂移。
   */
@@ -124,86 +124,8 @@ void chassis_rc_to_control_vector(fp32 *vx_set, fp32 *vy_set, chassis_move_t *ch
     vx_set_channel = (vx_norm * 660.0f) * CHASSIS_VX_RC_SEN * CHASSIS_RC_SLOW_SEN;
     vy_set_channel = (vy_norm * 660.0f) * (-CHASSIS_VY_RC_SEN) * CHASSIS_RC_SLOW_SEN;
 
-    if (vx_channel == 0 && vy_channel == 0)
-    {
-        fp32 translation_norm = sqrtf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out *
-                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out +
-                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out *
-                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out);
-
-        if (translation_norm < CHASSIS_CMD_ZERO_SNAP)
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
-        }
-        else
-        {
-            fp32 next_norm = translation_norm - CHASSIS_TRANSLATION_ZERO_DEC * CHASSIS_CONTROL_TIME;
-
-            if (next_norm < CHASSIS_CMD_ZERO_SNAP)
-            {
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
-            }
-            else
-            {
-                fp32 zero_scale = next_norm / translation_norm;
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out *= zero_scale;
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out *= zero_scale;
-            }
-        }
-    }
-    else
-    {
-        if (vx_channel == 0)
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out =
-                chassis_slew_limit(0.0f,
-                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out,
-                                   CHASSIS_VX_ZERO_DEC,
-                                   CHASSIS_VX_ZERO_DEC,
-                                   CHASSIS_CONTROL_TIME);
-            if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out) < CHASSIS_CMD_ZERO_SNAP)
-            {
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out = 0.0f;
-            }
-        }
-        else
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out =
-                chassis_slew_limit(vx_set_channel,
-                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out,
-                                   CHASSIS_VX_ACC_UP,
-                                   CHASSIS_VX_ACC_DOWN,
-                                   CHASSIS_CONTROL_TIME);
-        }
-
-        if (vy_channel == 0)
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out =
-                chassis_slew_limit(0.0f,
-                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out,
-                                   CHASSIS_VY_ZERO_DEC,
-                                   CHASSIS_VY_ZERO_DEC,
-                                   CHASSIS_CONTROL_TIME);
-            if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out) < CHASSIS_CMD_ZERO_SNAP)
-            {
-                chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out = 0.0f;
-            }
-        }
-        else
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out =
-                chassis_slew_limit(vy_set_channel,
-                                   chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out,
-                                   CHASSIS_VY_ACC_UP,
-                                   CHASSIS_VY_ACC_DOWN,
-                                   CHASSIS_CONTROL_TIME);
-        }
-    }
-
-    *vx_set = chassis_move_rc_to_vector->chassis_cmd_slow_set_vx.out;
-    *vy_set = chassis_move_rc_to_vector->chassis_cmd_slow_set_vy.out;
+    *vx_set = vx_set_channel;
+    *vy_set = vy_set_channel;
 }
 
 /**
@@ -271,6 +193,7 @@ static void chassis_init(chassis_move_t *chassis_move_init)
     chassis_move_init->wheel_speed_limit = MAX_WHEEL_SPEED;
 
     chassis_odometry_init(chassis_move_init);
+    chassis_trajectory_init(chassis_move_init);
     chassis_mech_fault_reset(chassis_move_init);
     chassis_feedback_update(chassis_move_init);
 }
@@ -401,6 +324,9 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
     fp32 vx_set = 0.0f;
     fp32 vy_set = 0.0f;
     fp32 angle_set = 0.0f;
+    fp32 raw_vx_set = 0.0f;
+    fp32 raw_vy_set = 0.0f;
+    fp32 raw_wz_set = 0.0f;
 
     if (chassis_move_control == NULL)
     {
@@ -411,21 +337,23 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
 
     if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_DRIVE)
     {
-        chassis_move_control->wz_set = fp32_constrain(angle_set,
-                                                      chassis_move_control->wz_min_speed,
-                                                      chassis_move_control->wz_max_speed);
-        chassis_move_control->vx_set = fp32_constrain(vx_set,
-                                                      chassis_move_control->vx_min_speed,
-                                                      chassis_move_control->vx_max_speed);
-        chassis_move_control->vy_set = fp32_constrain(vy_set,
-                                                      chassis_move_control->vy_min_speed,
-                                                      chassis_move_control->vy_max_speed);
+        raw_wz_set = fp32_constrain(angle_set,
+                                    chassis_move_control->wz_min_speed,
+                                    chassis_move_control->wz_max_speed);
+        raw_vx_set = fp32_constrain(vx_set,
+                                    chassis_move_control->vx_min_speed,
+                                    chassis_move_control->vx_max_speed);
+        raw_vy_set = fp32_constrain(vy_set,
+                                    chassis_move_control->vy_min_speed,
+                                    chassis_move_control->vy_max_speed);
+        chassis_trajectory_update(chassis_move_control, raw_vx_set, raw_vy_set, raw_wz_set);
     }
     else if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_RAW)
     {
         chassis_move_control->vx_set = vx_set;
         chassis_move_control->vy_set = vy_set;
         chassis_move_control->wz_set = angle_set;
+        chassis_trajectory_reset();
         chassis_move_control->chassis_cmd_slow_set_vx.out = 0.0f;
         chassis_move_control->chassis_cmd_slow_set_vy.out = 0.0f;
         chassis_move_control->chassis_cmd_slow_set_wz.out = 0.0f;
@@ -485,45 +413,4 @@ static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo)
     output = (1.0f - expo_ratio) * normalized + expo_ratio * normalized * normalized * normalized;
 
     return fp32_constrain(output, -1.0f, 1.0f);
-}
-
-/**
-  * @brief  Limit target change rate.
-  * @brief  限制目标值变化速率。
-  * @param[in] target Desired value.
-  * @param[in] current Current filtered value.
-  * @param[in] acc_up Positive slew rate.
-  * @param[in] acc_down Negative slew rate.
-  * @param[in] dt Control period in seconds.
-  * @param[in] target 目标值。
-  * @param[in] current 当前滤波值。
-  * @param[in] acc_up 正方向变化速率。
-  * @param[in] acc_down 负方向变化速率。
-  * @param[in] dt 控制周期，单位秒。
-  * @retval Slew-limited next value.
-  * @retval 斜坡限幅后的下一周期值。
-  */
-static fp32 chassis_slew_limit(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt)
-{
-    fp32 delta = target - current;
-    fp32 limit = 0.0f;
-
-    if (delta >= 0.0f)
-    {
-        limit = acc_up * dt;
-        if (delta > limit)
-        {
-            delta = limit;
-        }
-    }
-    else
-    {
-        limit = acc_down * dt;
-        if (delta < -limit)
-        {
-            delta = -limit;
-        }
-    }
-
-    return current + delta;
 }

@@ -1,6 +1,17 @@
 ﻿#ifndef CAN_RECEIVE_H
 #define CAN_RECEIVE_H
 
+/**
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  * @file       CAN_receive.h
+  * @brief      CAN motor command and feedback interface.
+  * @brief      CAN 电机指令与反馈接口。
+  * @note       Provides chassis/gimbal CAN transmit helpers and readonly
+  *             access to decoded motor feedback data.
+  * @note       提供底盘/云台 CAN 发送接口，以及电机反馈数据只读访问接口。
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  */
+
 #include "struct_typedef.h"
 
 #define CHASSIS_CAN hcan1

@@ -59,6 +59,7 @@
 #include "cmsis_os.h"
 #include "bsp_buzzer.h"
 #include "bsp_led.h"
+#include "chassis_fault.h"
 #include "chassis_task.h"
 #include "detect_task.h"
 
@@ -183,6 +184,11 @@ static void buzzer_warn_error(uint8_t num)
 #define STATUS_REMOTE_ONLY_LED_TOGGLE_MS   200U
 #define STATUS_REMOTE_ONLY_BEEP_PERIOD_MS  200U
 #define STATUS_REMOTE_ONLY_BEEP_ON_MS      50U
+#define STATUS_FAULT_ACK_LONG_PRESS_MS     1000U
+#define STATUS_FAULT_ACK_BEEP_TOTAL_MS     320U
+#define STATUS_FAULT_ACK_BEEP_ON_MS        70U
+#define STATUS_FAULT_ACK_BEEP_GAP_MS       90U
+#define STATUS_FAULT_ACK_BUZZER_PSC        2U
 
 typedef enum
 {
@@ -196,10 +202,12 @@ typedef enum
 static uint8_t chassis_motors_all_online(void);
 static uint8_t remote_online(void);
 static connection_state_e connection_status_get_state(void);
+static uint8_t connection_status_update_fault_ack_key(void);
 static void connection_status_apply_led(connection_state_e state, uint32_t state_time_ms);
 static void connection_status_apply_buzzer(connection_state_e state,
                                            uint32_t state_time_ms,
-                                           uint32_t success_beep_left_ms);
+                                           uint32_t success_beep_left_ms,
+                                           uint32_t ack_beep_left_ms);
 
 static uint8_t chassis_motors_all_online(void)
 {
@@ -240,6 +248,36 @@ static connection_state_e connection_status_get_state(void)
     }
 
     return CONNECTION_STATE_NONE_OK;
+}
+
+static uint8_t connection_status_update_fault_ack_key(void)
+{
+    static uint16_t key_press_time_ms = 0U;
+    static uint8_t confirmed_this_press = 0U;
+    GPIO_PinState key_state = HAL_GPIO_ReadPin(CHASSIS_FAULT_ACK_KEY_GPIO_Port,
+                                               CHASSIS_FAULT_ACK_KEY_Pin);
+
+    if (key_state == GPIO_PIN_RESET)
+    {
+        if (key_press_time_ms < STATUS_FAULT_ACK_LONG_PRESS_MS)
+        {
+            key_press_time_ms += STATUS_TASK_PERIOD_MS;
+        }
+
+        if (key_press_time_ms >= STATUS_FAULT_ACK_LONG_PRESS_MS &&
+            confirmed_this_press == 0U)
+        {
+            confirmed_this_press = 1U;
+            return (uint8_t)(chassis_fault_confirm_all() > 0U);
+        }
+    }
+    else
+    {
+        key_press_time_ms = 0U;
+        confirmed_this_press = 0U;
+    }
+
+    return 0U;
 }
 
 static void connection_status_apply_led(connection_state_e state, uint32_t state_time_ms)
@@ -308,8 +346,26 @@ static void connection_status_apply_led(connection_state_e state, uint32_t state
 
 static void connection_status_apply_buzzer(connection_state_e state,
                                            uint32_t state_time_ms,
-                                           uint32_t success_beep_left_ms)
+                                           uint32_t success_beep_left_ms,
+                                           uint32_t ack_beep_left_ms)
 {
+    if (ack_beep_left_ms > 0U)
+    {
+        uint32_t phase = STATUS_FAULT_ACK_BEEP_TOTAL_MS - ack_beep_left_ms;
+
+        if ((phase < STATUS_FAULT_ACK_BEEP_ON_MS) ||
+            (phase >= (STATUS_FAULT_ACK_BEEP_ON_MS + STATUS_FAULT_ACK_BEEP_GAP_MS) &&
+             phase < ((STATUS_FAULT_ACK_BEEP_ON_MS * 2U) + STATUS_FAULT_ACK_BEEP_GAP_MS)))
+        {
+            buzzer_on(STATUS_FAULT_ACK_BUZZER_PSC, STATUS_BUZZER_PWM);
+        }
+        else
+        {
+            buzzer_off();
+        }
+        return;
+    }
+
     switch (state)
     {
         case CONNECTION_STATE_ALL_OK:
@@ -385,6 +441,7 @@ void test_task(void const *argument)
     connection_state_e last_state;
     uint32_t state_time_ms = 0U;
     uint32_t success_beep_left_ms = 0U;
+    uint32_t ack_beep_left_ms = 0U;
 
     (void)argument;
 
@@ -401,6 +458,11 @@ void test_task(void const *argument)
 
     for (;;)
     {
+        if (connection_status_update_fault_ack_key() != 0U)
+        {
+            ack_beep_left_ms = STATUS_FAULT_ACK_BEEP_TOTAL_MS;
+        }
+
         current_state = connection_status_get_state();
 
         if (current_state != last_state)
@@ -414,7 +476,7 @@ void test_task(void const *argument)
         }
 
         connection_status_apply_led(current_state, state_time_ms);
-        connection_status_apply_buzzer(current_state, state_time_ms, success_beep_left_ms);
+        connection_status_apply_buzzer(current_state, state_time_ms, success_beep_left_ms, ack_beep_left_ms);
 
         osDelay(STATUS_TASK_PERIOD_MS);
 
@@ -430,6 +492,15 @@ void test_task(void const *argument)
         else
         {
             success_beep_left_ms = 0U;
+        }
+
+        if (ack_beep_left_ms > STATUS_TASK_PERIOD_MS)
+        {
+            ack_beep_left_ms -= STATUS_TASK_PERIOD_MS;
+        }
+        else
+        {
+            ack_beep_left_ms = 0U;
         }
     }
 }

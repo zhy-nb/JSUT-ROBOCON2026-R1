@@ -9,4 +9,3 @@ jsut-robocon2026-r1\chassis_behaviour.o: ../bsp/boards/bsp_rc.h
 jsut-robocon2026-r1\chassis_behaviour.o: ../components/algorithm/user_lib.h
 jsut-robocon2026-r1\chassis_behaviour.o: ..\application\detect_task.h
 jsut-robocon2026-r1\chassis_behaviour.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h
-jsut-robocon2026-r1\chassis_behaviour.o: D:\keil5\ARM\ARMCC\Bin\..\include\math.h

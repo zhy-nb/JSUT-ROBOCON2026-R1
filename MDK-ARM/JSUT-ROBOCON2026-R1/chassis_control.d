@@ -9,5 +9,6 @@ jsut-robocon2026-r1\chassis_control.o: ../bsp/boards/bsp_rc.h
 jsut-robocon2026-r1\chassis_control.o: ../components/algorithm/user_lib.h
 jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_fault.h
 jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_power.h
+jsut-robocon2026-r1\chassis_control.o: ..\application\chassis_trajectory.h
 jsut-robocon2026-r1\chassis_control.o: D:\keil5\ARM\ARMCC\Bin\..\include\math.h
 jsut-robocon2026-r1\chassis_control.o: D:\keil5\ARM\ARMCC\Bin\..\include\stddef.h

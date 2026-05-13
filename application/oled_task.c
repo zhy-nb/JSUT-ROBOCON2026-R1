@@ -1,8 +1,21 @@
+/**
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  * @file       oled_task.c
+  * @brief      OLED status page task.
+  * @brief      OLED 状态页任务实现。
+  * @note       Displays chassis connection state, fault/degraded state,
+  *             battery voltage, motor current and IMU temperature.
+  * @note       用于显示底盘连接状态、故障/降级状态、电池电压、
+  *             电机电流和 IMU 温度。
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  */
+
 #include "oled_task.h"
 
 #include "CAN_receive.h"
 #include "INS_task.h"
 #include "chassis_behaviour.h"
+#include "chassis_fault.h"
 #include "cmsis_os.h"
 #include "detect_task.h"
 #include "oled_ssd1306.h"
@@ -28,11 +41,16 @@ static void oled_format_voltage_total_current_line(char *buffer,
 static void oled_format_total_current_temperature_line(char *buffer,
                                                        int32_t total_current_x10,
                                                        fp32 temperature);
+static void oled_append_fault_short(char **cursor, chassis_fault_id_e id);
 static void oled_format_mode_line(char *buffer,
                                   chassis_behaviour_e mode,
                                   uint8_t lost_mask,
                                   uint8_t rc_lost);
 
+/**
+  * @brief  Periodically refresh OLED chassis status page.
+  * @brief  周期刷新 OLED 底盘状态页。
+  */
 void oled_task(void const *argument)
 {
     char line_text[22];
@@ -78,7 +96,8 @@ void oled_task(void const *argument)
                                                    oled_get_total_motor_current_x10());
             oled_ssd1306_write_string(0, 32, line_text);
 
-            oled_ssd1306_write_string(0, 48, "MODE DRV DEG MECH");
+            oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
+            oled_ssd1306_write_string(0, 48, line_text);
         }
         else if (oled_is_all_connected(motor_lost_mask, rc_lost) != 0U)
         {
@@ -126,6 +145,10 @@ void oled_task(void const *argument)
     }
 }
 
+/**
+  * @brief  Append constant text into a line buffer.
+  * @brief  向行缓冲区追加固定文本。
+  */
 static void oled_copy_text(char **cursor, const char *text)
 {
     while (*text != '\0')
@@ -136,6 +159,10 @@ static void oled_copy_text(char **cursor, const char *text)
     }
 }
 
+/**
+  * @brief  Append an unsigned integer without stdio dependency.
+  * @brief  在不依赖 stdio 的情况下追加无符号整数。
+  */
 static void oled_append_uint(char **cursor, uint32_t value)
 {
     char reverse_digits[10];
@@ -173,6 +200,10 @@ static int32_t oled_abs_i32(int32_t value)
     return value;
 }
 
+/**
+  * @brief  Build bitmask for currently lost chassis motors.
+  * @brief  生成当前掉线底盘电机位掩码。
+  */
 static uint8_t oled_get_motor_lost_mask(void)
 {
     uint8_t i;
@@ -238,6 +269,10 @@ static int32_t oled_get_average_motor_current_x10(void)
            OLED_MOTOR_CURRENT_FULL_SCALE;
 }
 
+/**
+  * @brief  Estimate total motor feedback current in 0.1 A units.
+  * @brief  估算四个电机反馈总电流，单位 0.1 A。
+  */
 static int32_t oled_get_total_motor_current_x10(void)
 {
     uint8_t i;
@@ -435,12 +470,65 @@ static void oled_format_total_current_temperature_line(char *buffer,
     *p = '\0';
 }
 
+/**
+  * @brief  Append compact fault name for 128x64 OLED line width.
+  * @brief  追加适合 128x64 OLED 行宽的短故障名。
+  */
+static void oled_append_fault_short(char **cursor, chassis_fault_id_e id)
+{
+    switch (id)
+    {
+        case CHASSIS_FAULT_RC_LOST:
+        {
+            oled_copy_text(cursor, "RC");
+            break;
+        }
+
+        case CHASSIS_FAULT_SINGLE_MOTOR_LOST:
+        {
+            oled_copy_text(cursor, "3W");
+            break;
+        }
+
+        case CHASSIS_FAULT_MULTI_MOTOR_LOST:
+        {
+            oled_copy_text(cursor, "M2+");
+            break;
+        }
+
+        case CHASSIS_FAULT_WHEEL_SLIP:
+        {
+            oled_copy_text(cursor, "SLIP");
+            break;
+        }
+
+        case CHASSIS_FAULT_HUB_LOOSE:
+        {
+            oled_copy_text(cursor, "HUB");
+            break;
+        }
+
+        default:
+        {
+            oled_copy_text(cursor, "NONE");
+            break;
+        }
+    }
+}
+
+/**
+  * @brief  Format mode and degraded/fault status line.
+  * @brief  格式化模式与降级/故障状态行。
+  */
 static void oled_format_mode_line(char *buffer,
                                   chassis_behaviour_e mode,
                                   uint8_t lost_mask,
                                   uint8_t rc_lost)
 {
     uint8_t lost_count = oled_get_motor_lost_count(lost_mask);
+    chassis_fault_id_e fault_id = chassis_fault_get_active_id();
+    chassis_fault_strategy_e fault_strategy = chassis_fault_get_strategy();
+    const chassis_fault_record_t *fault_record = chassis_fault_get_record(fault_id);
     char *p = buffer;
 
     oled_copy_text(&p, "MODE ");
@@ -461,6 +549,21 @@ static void oled_format_mode_line(char *buffer,
     if (!detect_task_is_inited())
     {
         oled_copy_text(&p, "INIT");
+    }
+    else if (fault_record->active != 0U && fault_record->recoverable != 0U)
+    {
+        oled_copy_text(&p, "ACK ");
+        oled_append_fault_short(&p, fault_id);
+    }
+    else if (fault_strategy == CHASSIS_FAULT_STRATEGY_STOP)
+    {
+        oled_copy_text(&p, "FLT ");
+        oled_append_fault_short(&p, fault_id);
+    }
+    else if (fault_strategy == CHASSIS_FAULT_STRATEGY_LIMIT)
+    {
+        oled_copy_text(&p, "DEG ");
+        oled_append_fault_short(&p, fault_id);
     }
     else if (rc_lost != 0U)
     {

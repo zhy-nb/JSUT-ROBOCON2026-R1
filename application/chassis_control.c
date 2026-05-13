@@ -14,11 +14,12 @@
 
 #include "chassis_fault.h"
 #include "chassis_power.h"
+#include "chassis_trajectory.h"
 
 #include <math.h>
 #include <stddef.h>
 
-static fp32 chassis_calc_wheel_feedforward(fp32 speed_set, fp32 last_speed_set);
+static fp32 chassis_calc_wheel_feedforward(fp32 speed_set, fp32 last_speed_set, fp32 load_factor);
 static uint8_t chassis_is_stop_command(const chassis_move_t *chassis_move_control);
 static fp32 chassis_calc_stop_damping_current(fp32 speed);
 static void chassis_vector_to_mecanum_wheel_speed(fp32 vx_set,
@@ -52,6 +53,7 @@ void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
     fp32 vector_rate = 0.0f;
     fp32 temp = 0.0f;
     fp32 battery_compensation_scale = 1.0f;
+    fp32 load_factor = 0.0f;
     fp32 wheel_speed[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     uint8_t stop_lock = 0U;
     uint8_t i = 0U;
@@ -131,6 +133,7 @@ void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
     }
 
     battery_compensation_scale = chassis_power_get_battery_compensation_scale();
+    load_factor = chassis_trajectory_get_load_factor();
 
     for (i = 0U; i < 4U; i++)
     {
@@ -177,7 +180,8 @@ void chassis_control_loop(chassis_move_t *chassis_move_control_loop)
                  chassis_move_control_loop->motor_chassis[i].speed_set);
         chassis_move_control_loop->motor_chassis[i].feedforward_current =
             chassis_calc_wheel_feedforward(chassis_move_control_loop->motor_chassis[i].speed_set,
-                                           chassis_move_control_loop->motor_chassis[i].speed_set_last);
+                                           chassis_move_control_loop->motor_chassis[i].speed_set_last,
+                                           load_factor);
         chassis_move_control_loop->motor_chassis[i].current_set =
             (chassis_move_control_loop->motor_speed_pid[i].out +
              chassis_move_control_loop->motor_chassis[i].feedforward_current) *
@@ -248,22 +252,26 @@ void chassis_control_send_motor_current(const chassis_move_t *chassis_move_send)
   *         static friction offset. The output is bounded independently.
   * @note   包含速度前馈、加速度前馈和静摩擦补偿，输出会独立限幅。
   */
-static fp32 chassis_calc_wheel_feedforward(fp32 speed_set, fp32 last_speed_set)
+static fp32 chassis_calc_wheel_feedforward(fp32 speed_set, fp32 last_speed_set, fp32 load_factor)
 {
     fp32 feedforward = 0.0f;
     fp32 speed_acc_set = 0.0f;
+    fp32 static_friction_current = 0.0f;
 
     speed_acc_set = (speed_set - last_speed_set) * CHASSIS_CONTROL_FREQUENCE;
+    load_factor = fp32_constrain(load_factor, 0.0f, 1.0f);
+    static_friction_current = CHASSIS_WHEEL_STATIC_FF_CURRENT +
+                              CHASSIS_WHEEL_LOAD_FRICTION_FF_CURRENT * load_factor;
     feedforward = speed_set * CHASSIS_WHEEL_SPEED_FF_GAIN +
                   speed_acc_set * CHASSIS_WHEEL_ACCEL_FF_GAIN;
 
     if (speed_set > CHASSIS_WHEEL_FF_SPEED_DEADBAND)
     {
-        feedforward += CHASSIS_WHEEL_STATIC_FF_CURRENT;
+        feedforward += static_friction_current;
     }
     else if (speed_set < -CHASSIS_WHEEL_FF_SPEED_DEADBAND)
     {
-        feedforward -= CHASSIS_WHEEL_STATIC_FF_CURRENT;
+        feedforward -= static_friction_current;
     }
 
     return fp32_constrain(feedforward,

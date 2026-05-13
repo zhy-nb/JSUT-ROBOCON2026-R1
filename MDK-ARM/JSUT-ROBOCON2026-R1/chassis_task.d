@@ -10,6 +10,7 @@ jsut-robocon2026-r1\chassis_task.o: ..\application\chassis_behaviour.h
 jsut-robocon2026-r1\chassis_task.o: ..\application\chassis_control.h
 jsut-robocon2026-r1\chassis_task.o: ..\application\chassis_fault.h
 jsut-robocon2026-r1\chassis_task.o: ..\application\chassis_odometry.h
+jsut-robocon2026-r1\chassis_task.o: ..\application\chassis_trajectory.h
 jsut-robocon2026-r1\chassis_task.o: ../components/algorithm/Include/arm_math.h
 jsut-robocon2026-r1\chassis_task.o: ../Drivers/CMSIS/Include/core_cm4.h
 jsut-robocon2026-r1\chassis_task.o: D:\keil5\ARM\ARMCC\Bin\..\include\stdint.h

@@ -381,7 +381,7 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>Application/MDK-ARM</GroupName>
+          <GroupName>Startup</GroupName>
           <Files>
             <File>
               <FileName>startup_stm32f407xx.s</FileName>
@@ -391,7 +391,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>Application/User</GroupName>
+          <GroupName>CubeMX/Core</GroupName>
           <Files>
             <File>
               <FileName>main.c</FileName>
@@ -466,7 +466,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>boards</GroupName>
+          <GroupName>BSP/Board</GroupName>
           <Files>
             <File>
               <FileName>bsp_buzzer.c</FileName>
@@ -511,17 +511,12 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>application</GroupName>
+          <GroupName>Application/System</GroupName>
           <Files>
             <File>
               <FileName>calibrate_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\application\calibrate_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>CAN_receive.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\application\CAN_receive.c</FilePath>
             </File>
             <File>
               <FileName>detect_task.c</FileName>
@@ -533,21 +528,26 @@
               <FileType>1</FileType>
               <FilePath>..\application\INS_task.c</FilePath>
             </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Application/Communication</GroupName>
+          <Files>
             <File>
-              <FileName>led_flow_task.c</FileName>
+              <FileName>CAN_receive.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\application\led_flow_task.c</FilePath>
+              <FilePath>..\application\CAN_receive.c</FilePath>
             </File>
             <File>
               <FileName>remote_control.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\application\remote_control.c</FilePath>
             </File>
-            <File>
-              <FileName>test_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\application\test_task.c</FilePath>
-            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Application/Chassis</GroupName>
+          <Files>
             <File>
               <FileName>chassis_behaviour.c</FileName>
               <FileType>1</FileType>
@@ -579,6 +579,21 @@
               <FilePath>..\application\chassis_task.c</FilePath>
             </File>
             <File>
+              <FileName>chassis_trajectory.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\chassis_trajectory.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Application/UI_Status</GroupName>
+          <Files>
+            <File>
+              <FileName>led_flow_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\led_flow_task.c</FilePath>
+            </File>
+            <File>
               <FileName>oled_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\application\oled_task.c</FilePath>
@@ -588,10 +603,15 @@
               <FileType>1</FileType>
               <FilePath>..\application\power_monitor.c</FilePath>
             </File>
+            <File>
+              <FileName>test_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\application\test_task.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
-          <GroupName>devices</GroupName>
+          <GroupName>Components/Devices</GroupName>
           <Files>
             <File>
               <FileName>BMI088driver.c</FileName>
@@ -621,7 +641,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>algorithm</GroupName>
+          <GroupName>Components/Algorithm</GroupName>
           <Files>
             <File>
               <FileName>AHRS_middleware.c</FileName>
@@ -646,7 +666,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>controller</GroupName>
+          <GroupName>Components/Controller</GroupName>
           <Files>
             <File>
               <FileName>pid.c</FileName>

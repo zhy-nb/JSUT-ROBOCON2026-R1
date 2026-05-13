@@ -1,3 +1,15 @@
+/**
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  * @file       oled_ssd1306.c
+  * @brief      SSD1306 I2C OLED driver.
+  * @brief      SSD1306 I2C OLED 驱动实现。
+  * @note       Provides a small ASCII-only framebuffer driver for 128x64 OLED
+  *             modules on I2C2.
+  * @note       面向 I2C2 上的 128x64 OLED 模块，提供轻量 ASCII 字符显示
+  *             和显存刷新能力。
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  */
+
 #include "oled_ssd1306.h"
 
 #include "i2c.h"
@@ -65,6 +77,10 @@ static const uint8_t font_letters[26][5] = {
     {0x61, 0x51, 0x49, 0x45, 0x43},
 };
 
+/**
+  * @brief  Initialize SSD1306 and clear display.
+  * @brief  初始化 SSD1306 并清屏。
+  */
 uint8_t oled_ssd1306_init(void)
 {
     static const uint8_t init_commands[] = {
@@ -104,11 +120,19 @@ uint8_t oled_ssd1306_init(void)
     return 0;
 }
 
+/**
+  * @brief  Clear local OLED framebuffer.
+  * @brief  清空本地 OLED 显存。
+  */
 void oled_ssd1306_clear(void)
 {
     memset(oled_buffer, 0, sizeof(oled_buffer));
 }
 
+/**
+  * @brief  Flush local framebuffer to OLED pages.
+  * @brief  将本地显存按页刷新到 OLED。
+  */
 void oled_ssd1306_update(void)
 {
     uint8_t page = 0;
@@ -122,6 +146,10 @@ void oled_ssd1306_update(void)
     }
 }
 
+/**
+  * @brief  Draw one 5x7 ASCII character into framebuffer.
+  * @brief  向显存写入一个 5x7 ASCII 字符。
+  */
 void oled_ssd1306_write_char(uint8_t x, uint8_t y, char ch)
 {
     const uint8_t *font = oled_get_font(ch);
@@ -144,6 +172,10 @@ void oled_ssd1306_write_char(uint8_t x, uint8_t y, char ch)
     }
 }
 
+/**
+  * @brief  Draw a null-terminated ASCII string.
+  * @brief  写入一个以空字符结尾的 ASCII 字符串。
+  */
 void oled_ssd1306_write_string(uint8_t x, uint8_t y, const char *str)
 {
     uint8_t cursor_x = x;
@@ -168,6 +200,10 @@ void oled_ssd1306_write_string(uint8_t x, uint8_t y, const char *str)
     }
 }
 
+/**
+  * @brief  Send one SSD1306 command byte.
+  * @brief  发送一个 SSD1306 命令字节。
+  */
 static uint8_t oled_write_command(uint8_t command)
 {
     uint8_t buffer[2] = {OLED_CMD_PREFIX, command};
@@ -175,6 +211,10 @@ static uint8_t oled_write_command(uint8_t command)
     return (HAL_I2C_Master_Transmit(&hi2c2, oled_address, buffer, sizeof(buffer), OLED_I2C_TIMEOUT) == HAL_OK) ? 0u : 1u;
 }
 
+/**
+  * @brief  Send framebuffer data in small I2C chunks.
+  * @brief  分块发送显存数据，避免单次 I2C 数据过长。
+  */
 static uint8_t oled_write_data(const uint8_t *data, uint16_t length)
 {
     uint8_t buffer[17];
@@ -198,6 +238,10 @@ static uint8_t oled_write_data(const uint8_t *data, uint16_t length)
     return 0;
 }
 
+/**
+  * @brief  Resolve supported ASCII character to font data.
+  * @brief  将支持的 ASCII 字符映射到字模数据。
+  */
 static const uint8_t *oled_get_font(char ch)
 {
     if (ch >= '0' && ch <= '9')

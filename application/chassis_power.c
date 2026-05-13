@@ -51,8 +51,14 @@ fp32 chassis_power_get_battery_compensation_scale(void)
   */
 void chassis_power_apply_total_current_limit(chassis_move_t *chassis_move_control)
 {
+    fp32 wheel_demand[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     fp32 total_current = 0.0f;
     fp32 current_scale = 1.0f;
+    fp32 demand_sum = 0.0f;
+    fp32 min_budget = CHASSIS_WHEEL_CURRENT_MIN_BUDGET;
+    fp32 remaining_budget = 0.0f;
+    fp32 wheel_budget = 0.0f;
+    uint8_t healthy_count = 0U;
     uint8_t i = 0U;
 
     if (chassis_move_control == NULL)
@@ -68,10 +74,53 @@ void chassis_power_apply_total_current_limit(chassis_move_t *chassis_move_contro
             continue;
         }
 
+        healthy_count++;
+        wheel_demand[i] = fabsf(chassis_move_control->motor_chassis[i].speed_set) +
+                          CHASSIS_WHEEL_CURRENT_DEMAND_EPS;
+        demand_sum += wheel_demand[i];
         chassis_move_control->motor_chassis[i].current_set =
             fp32_constrain(chassis_move_control->motor_chassis[i].current_set,
                            -MAX_MOTOR_CAN_CURRENT,
                            MAX_MOTOR_CAN_CURRENT);
+    }
+
+    if (healthy_count == 0U)
+    {
+        return;
+    }
+
+    if ((min_budget * (fp32)healthy_count) > CHASSIS_TOTAL_CURRENT_LIMIT)
+    {
+        min_budget = CHASSIS_TOTAL_CURRENT_LIMIT / (fp32)healthy_count;
+    }
+
+    remaining_budget = CHASSIS_TOTAL_CURRENT_LIMIT - min_budget * (fp32)healthy_count;
+
+    for (i = 0U; i < 4U; i++)
+    {
+        if (chassis_motor_is_lost(i))
+        {
+            continue;
+        }
+
+        if (demand_sum > 1e-6f)
+        {
+            wheel_budget = min_budget + remaining_budget * (wheel_demand[i] / demand_sum);
+        }
+        else
+        {
+            wheel_budget = CHASSIS_TOTAL_CURRENT_LIMIT / (fp32)healthy_count;
+        }
+
+        if (wheel_budget > MAX_MOTOR_CAN_CURRENT)
+        {
+            wheel_budget = MAX_MOTOR_CAN_CURRENT;
+        }
+
+        chassis_move_control->motor_chassis[i].current_set =
+            fp32_constrain(chassis_move_control->motor_chassis[i].current_set,
+                           -wheel_budget,
+                           wheel_budget);
         total_current += fabsf(chassis_move_control->motor_chassis[i].current_set);
     }
 

@@ -19,8 +19,55 @@
 #include <math.h>
 #include <stddef.h>
 
+#define CHASSIS_FAULT_HISTORY_NUM 16U
+#define CHASSIS_FAULT_AUTO_CLEAR_COUNT 50U
+#define CHASSIS_FAULT_MANUAL_CLEAR_COUNT 100U
+
+typedef struct
+{
+    chassis_fault_id_e id;
+    chassis_fault_level_e level;
+    chassis_fault_strategy_e strategy;
+    uint8_t latch;
+    uint8_t manual_confirm;
+    uint16_t clear_count_threshold;
+} chassis_fault_config_t;
+
+typedef struct
+{
+    chassis_fault_record_t records[CHASSIS_FAULT_NUM];
+    chassis_fault_history_t history[CHASSIS_FAULT_HISTORY_NUM];
+    chassis_fault_id_e active_id;
+    chassis_fault_level_e level;
+    chassis_fault_strategy_e strategy;
+    uint32_t sequence;
+    uint8_t history_index;
+    uint8_t history_count;
+} chassis_fault_manager_t;
+
 static chassis_move_t *chassis_fault_owner = NULL;
 static const chassis_mech_fault_state_t chassis_empty_fault = {CHASSIS_MECH_FAULT_NONE, 0U, 0U, 0U};
+static const chassis_fault_record_t chassis_empty_record = {
+    CHASSIS_FAULT_NONE,
+    CHASSIS_FAULT_LEVEL_NONE,
+    CHASSIS_FAULT_STRATEGY_NONE,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
+};
+
+static const chassis_fault_config_t chassis_fault_configs[CHASSIS_FAULT_NUM] = {
+    {CHASSIS_FAULT_NONE, CHASSIS_FAULT_LEVEL_NONE, CHASSIS_FAULT_STRATEGY_NONE, 0U, 0U, 0U},
+    {CHASSIS_FAULT_RC_LOST, CHASSIS_FAULT_LEVEL_STOP, CHASSIS_FAULT_STRATEGY_STOP, 0U, 0U, CHASSIS_FAULT_AUTO_CLEAR_COUNT},
+    {CHASSIS_FAULT_SINGLE_MOTOR_LOST, CHASSIS_FAULT_LEVEL_DEGRADED, CHASSIS_FAULT_STRATEGY_LIMIT, 0U, 0U, CHASSIS_FAULT_AUTO_CLEAR_COUNT},
+    {CHASSIS_FAULT_MULTI_MOTOR_LOST, CHASSIS_FAULT_LEVEL_STOP, CHASSIS_FAULT_STRATEGY_STOP, 1U, 1U, CHASSIS_FAULT_MANUAL_CLEAR_COUNT},
+    {CHASSIS_FAULT_WHEEL_SLIP, CHASSIS_FAULT_LEVEL_DEGRADED, CHASSIS_FAULT_STRATEGY_LIMIT, 1U, 1U, CHASSIS_FAULT_MANUAL_CLEAR_COUNT},
+    {CHASSIS_FAULT_HUB_LOOSE, CHASSIS_FAULT_LEVEL_DEGRADED, CHASSIS_FAULT_STRATEGY_LIMIT, 1U, 1U, CHASSIS_FAULT_MANUAL_CLEAR_COUNT},
+};
+
+static chassis_fault_manager_t chassis_fault_manager;
 
 /* Map chassis motor index [0..3] to the unified detect_task TOE id.
  * 将底盘电机编号 [0..3] 映射到 detect_task 中统一使用的 TOE 编号。
@@ -38,6 +85,11 @@ static void chassis_get_wheel_kinematic_row(uint8_t motor_index, fp32 row[3]);
 static uint8_t chassis_solve_linear_3x3(fp32 matrix_in[3][3],
                                         fp32 vector_in[3],
                                         fp32 solution[3]);
+static void chassis_fault_manager_init(void);
+static void chassis_fault_manager_update(const chassis_move_t *chassis_move_control);
+static void chassis_fault_update_source(chassis_fault_id_e id, uint8_t source_active);
+static void chassis_fault_refresh_summary(void);
+static void chassis_fault_push_history(chassis_fault_id_e id, uint8_t active);
 static void chassis_fault_reset_motion_command(chassis_move_t *chassis_move_control);
 static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_move_control);
 
@@ -50,6 +102,7 @@ static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_mov
 void chassis_fault_bind(chassis_move_t *chassis_move_control)
 {
     chassis_fault_owner = chassis_move_control;
+    chassis_fault_manager_init();
 }
 
 /**
@@ -221,22 +274,20 @@ uint8_t chassis_solve_body_vector_from_healthy_wheels(const chassis_move_t *chas
   */
 void chassis_fault_apply_strategy(chassis_move_t *chassis_move_control)
 {
-    uint8_t lost_motor_count = 0U;
-
     if (chassis_move_control == NULL)
     {
         return;
     }
 
-    lost_motor_count = chassis_lost_motor_count();
+    chassis_fault_manager_update(chassis_move_control);
 
-    if (toe_is_error(DBUS_TOE) || lost_motor_count >= CHASSIS_DEGRADE_STOP_MOTOR_COUNT)
+    if (chassis_fault_manager.strategy == CHASSIS_FAULT_STRATEGY_STOP)
     {
         chassis_fault_reset_motion_command(chassis_move_control);
         return;
     }
 
-    if (lost_motor_count == 1U || chassis_mech_fault_is_active() != 0U)
+    if (chassis_fault_manager.strategy == CHASSIS_FAULT_STRATEGY_LIMIT)
     {
         chassis_fault_limit_single_motor_command(chassis_move_control);
     }
@@ -394,6 +445,12 @@ uint8_t chassis_mech_fault_is_active(void)
         return 0U;
     }
 
+    if ((chassis_fault_manager.records[CHASSIS_FAULT_WHEEL_SLIP].active != 0U) ||
+        (chassis_fault_manager.records[CHASSIS_FAULT_HUB_LOOSE].active != 0U))
+    {
+        return 1U;
+    }
+
     return chassis_fault_owner->mech_fault.active;
 }
 
@@ -414,7 +471,278 @@ chassis_mech_fault_e chassis_get_mech_fault(void)
         return CHASSIS_MECH_FAULT_NONE;
     }
 
+    if (chassis_fault_manager.records[CHASSIS_FAULT_HUB_LOOSE].active != 0U)
+    {
+        return CHASSIS_MECH_FAULT_HUB_LOOSE;
+    }
+
+    if (chassis_fault_manager.records[CHASSIS_FAULT_WHEEL_SLIP].active != 0U)
+    {
+        return CHASSIS_MECH_FAULT_WHEEL_SLIP;
+    }
+
     return chassis_fault_owner->mech_fault.fault;
+}
+
+chassis_fault_id_e chassis_fault_get_active_id(void)
+{
+    return chassis_fault_manager.active_id;
+}
+
+chassis_fault_level_e chassis_fault_get_level(void)
+{
+    return chassis_fault_manager.level;
+}
+
+chassis_fault_strategy_e chassis_fault_get_strategy(void)
+{
+    return chassis_fault_manager.strategy;
+}
+
+const chassis_fault_record_t *chassis_fault_get_record(chassis_fault_id_e id)
+{
+    if (id >= CHASSIS_FAULT_NUM)
+    {
+        return &chassis_empty_record;
+    }
+
+    return &chassis_fault_manager.records[id];
+}
+
+uint8_t chassis_fault_confirm(chassis_fault_id_e id)
+{
+    chassis_fault_record_t *record = NULL;
+
+    if (id == CHASSIS_FAULT_NONE || id >= CHASSIS_FAULT_NUM)
+    {
+        return 0U;
+    }
+
+    record = &chassis_fault_manager.records[id];
+    if (record->latched == 0U || record->recoverable == 0U)
+    {
+        return 0U;
+    }
+
+    record->active = 0U;
+    record->latched = 0U;
+    record->recoverable = 0U;
+    record->clear_count = 0U;
+    chassis_fault_push_history(id, 0U);
+    chassis_fault_refresh_summary();
+    return 1U;
+}
+
+uint8_t chassis_fault_confirm_all(void)
+{
+    chassis_fault_id_e id = CHASSIS_FAULT_NONE;
+    uint8_t confirm_count = 0U;
+
+    for (id = CHASSIS_FAULT_RC_LOST; id < CHASSIS_FAULT_NUM; id++)
+    {
+        confirm_count += chassis_fault_confirm(id);
+    }
+
+    return confirm_count;
+}
+
+const chassis_fault_history_t *chassis_fault_get_history(uint8_t *count)
+{
+    if (count != NULL)
+    {
+        *count = chassis_fault_manager.history_count;
+    }
+
+    return chassis_fault_manager.history;
+}
+
+static void chassis_fault_manager_init(void)
+{
+    chassis_fault_id_e id = CHASSIS_FAULT_NONE;
+    uint8_t i = 0U;
+
+    for (id = CHASSIS_FAULT_NONE; id < CHASSIS_FAULT_NUM; id++)
+    {
+        chassis_fault_manager.records[id].id = chassis_fault_configs[id].id;
+        chassis_fault_manager.records[id].level = chassis_fault_configs[id].level;
+        chassis_fault_manager.records[id].strategy = chassis_fault_configs[id].strategy;
+        chassis_fault_manager.records[id].active = 0U;
+        chassis_fault_manager.records[id].latched = 0U;
+        chassis_fault_manager.records[id].recoverable = 0U;
+        chassis_fault_manager.records[id].clear_count = 0U;
+        chassis_fault_manager.records[id].occur_count = 0U;
+    }
+
+    for (i = 0U; i < CHASSIS_FAULT_HISTORY_NUM; i++)
+    {
+        chassis_fault_manager.history[i].sequence = 0U;
+        chassis_fault_manager.history[i].id = CHASSIS_FAULT_NONE;
+        chassis_fault_manager.history[i].level = CHASSIS_FAULT_LEVEL_NONE;
+        chassis_fault_manager.history[i].strategy = CHASSIS_FAULT_STRATEGY_NONE;
+        chassis_fault_manager.history[i].active = 0U;
+    }
+
+    chassis_fault_manager.active_id = CHASSIS_FAULT_NONE;
+    chassis_fault_manager.level = CHASSIS_FAULT_LEVEL_NONE;
+    chassis_fault_manager.strategy = CHASSIS_FAULT_STRATEGY_NONE;
+    chassis_fault_manager.sequence = 0U;
+    chassis_fault_manager.history_index = 0U;
+    chassis_fault_manager.history_count = 0U;
+}
+
+static void chassis_fault_manager_update(const chassis_move_t *chassis_move_control)
+{
+    uint8_t lost_motor_count = chassis_lost_motor_count();
+    uint8_t wheel_slip_active = 0U;
+    uint8_t hub_loose_active = 0U;
+
+    if (chassis_move_control != NULL && chassis_move_control->mech_fault.active != 0U)
+    {
+        if (chassis_move_control->mech_fault.fault == CHASSIS_MECH_FAULT_HUB_LOOSE)
+        {
+            hub_loose_active = 1U;
+        }
+        else if (chassis_move_control->mech_fault.fault == CHASSIS_MECH_FAULT_WHEEL_SLIP)
+        {
+            wheel_slip_active = 1U;
+        }
+    }
+
+    chassis_fault_update_source(CHASSIS_FAULT_RC_LOST, (uint8_t)toe_is_error(DBUS_TOE));
+    chassis_fault_update_source(CHASSIS_FAULT_SINGLE_MOTOR_LOST, (uint8_t)(lost_motor_count == 1U));
+    chassis_fault_update_source(CHASSIS_FAULT_MULTI_MOTOR_LOST, (uint8_t)(lost_motor_count >= CHASSIS_DEGRADE_STOP_MOTOR_COUNT));
+    chassis_fault_update_source(CHASSIS_FAULT_WHEEL_SLIP, wheel_slip_active);
+    chassis_fault_update_source(CHASSIS_FAULT_HUB_LOOSE, hub_loose_active);
+    chassis_fault_refresh_summary();
+}
+
+static void chassis_fault_update_source(chassis_fault_id_e id, uint8_t source_active)
+{
+    chassis_fault_record_t *record = NULL;
+    const chassis_fault_config_t *config = NULL;
+
+    if (id == CHASSIS_FAULT_NONE || id >= CHASSIS_FAULT_NUM)
+    {
+        return;
+    }
+
+    record = &chassis_fault_manager.records[id];
+    config = &chassis_fault_configs[id];
+
+    if (source_active != 0U)
+    {
+        record->clear_count = 0U;
+        record->recoverable = 0U;
+
+        if (record->active == 0U)
+        {
+            record->active = 1U;
+            record->level = config->level;
+            record->strategy = config->strategy;
+            record->latched = config->latch;
+            if (record->occur_count < 0xFFFFU)
+            {
+                record->occur_count++;
+            }
+            chassis_fault_push_history(id, 1U);
+        }
+        else
+        {
+            record->level = config->level;
+            record->strategy = config->strategy;
+            if (config->latch != 0U)
+            {
+                record->latched = 1U;
+            }
+        }
+        return;
+    }
+
+    if (record->active == 0U)
+    {
+        record->clear_count = 0U;
+        record->recoverable = 0U;
+        return;
+    }
+
+    if (record->clear_count < config->clear_count_threshold)
+    {
+        record->clear_count++;
+    }
+
+    if (record->clear_count < config->clear_count_threshold)
+    {
+        return;
+    }
+
+    if (config->manual_confirm != 0U && record->latched != 0U)
+    {
+        record->recoverable = 1U;
+        return;
+    }
+
+    record->active = 0U;
+    record->latched = 0U;
+    record->recoverable = 0U;
+    record->clear_count = 0U;
+    chassis_fault_push_history(id, 0U);
+}
+
+static void chassis_fault_refresh_summary(void)
+{
+    chassis_fault_id_e id = CHASSIS_FAULT_NONE;
+
+    chassis_fault_manager.active_id = CHASSIS_FAULT_NONE;
+    chassis_fault_manager.level = CHASSIS_FAULT_LEVEL_NONE;
+    chassis_fault_manager.strategy = CHASSIS_FAULT_STRATEGY_NONE;
+
+    for (id = CHASSIS_FAULT_RC_LOST; id < CHASSIS_FAULT_NUM; id++)
+    {
+        const chassis_fault_record_t *record = &chassis_fault_manager.records[id];
+
+        if (record->active == 0U)
+        {
+            continue;
+        }
+
+        if (record->level > chassis_fault_manager.level)
+        {
+            chassis_fault_manager.level = record->level;
+            chassis_fault_manager.active_id = id;
+        }
+
+        if (record->strategy > chassis_fault_manager.strategy)
+        {
+            chassis_fault_manager.strategy = record->strategy;
+        }
+    }
+}
+
+static void chassis_fault_push_history(chassis_fault_id_e id, uint8_t active)
+{
+    chassis_fault_history_t *history = &chassis_fault_manager.history[chassis_fault_manager.history_index];
+
+    if (id == CHASSIS_FAULT_NONE || id >= CHASSIS_FAULT_NUM)
+    {
+        return;
+    }
+
+    history->sequence = ++chassis_fault_manager.sequence;
+    history->id = id;
+    history->level = chassis_fault_configs[id].level;
+    history->strategy = chassis_fault_configs[id].strategy;
+    history->active = active;
+
+    chassis_fault_manager.history_index++;
+    if (chassis_fault_manager.history_index >= CHASSIS_FAULT_HISTORY_NUM)
+    {
+        chassis_fault_manager.history_index = 0U;
+    }
+
+    if (chassis_fault_manager.history_count < CHASSIS_FAULT_HISTORY_NUM)
+    {
+        chassis_fault_manager.history_count++;
+    }
 }
 
 /**

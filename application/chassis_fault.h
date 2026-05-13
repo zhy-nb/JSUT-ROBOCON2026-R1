@@ -15,6 +15,73 @@
 #include "chassis_task.h"
 
 /**
+  * @brief  Unified chassis fault id.
+  * @brief  统一底盘故障编号。
+  */
+typedef enum
+{
+    CHASSIS_FAULT_NONE = 0,
+    CHASSIS_FAULT_RC_LOST,
+    CHASSIS_FAULT_SINGLE_MOTOR_LOST,
+    CHASSIS_FAULT_MULTI_MOTOR_LOST,
+    CHASSIS_FAULT_WHEEL_SLIP,
+    CHASSIS_FAULT_HUB_LOOSE,
+    CHASSIS_FAULT_NUM,
+} chassis_fault_id_e;
+
+/**
+  * @brief  Fault severity level.
+  * @brief  故障严重等级。
+  */
+typedef enum
+{
+    CHASSIS_FAULT_LEVEL_NONE = 0,
+    CHASSIS_FAULT_LEVEL_WARN,
+    CHASSIS_FAULT_LEVEL_DEGRADED,
+    CHASSIS_FAULT_LEVEL_STOP,
+} chassis_fault_level_e;
+
+/**
+  * @brief  Strategy selected by the fault manager.
+  * @brief  故障管理器输出的处理策略。
+  */
+typedef enum
+{
+    CHASSIS_FAULT_STRATEGY_NONE = 0,
+    CHASSIS_FAULT_STRATEGY_LIMIT,
+    CHASSIS_FAULT_STRATEGY_STOP,
+} chassis_fault_strategy_e;
+
+/**
+  * @brief  Runtime state for one managed fault.
+  * @brief  单个受管故障的运行状态。
+  */
+typedef struct
+{
+    chassis_fault_id_e id;
+    chassis_fault_level_e level;
+    chassis_fault_strategy_e strategy;
+    uint8_t active;
+    uint8_t latched;
+    uint8_t recoverable;
+    uint16_t clear_count;
+    uint16_t occur_count;
+} chassis_fault_record_t;
+
+/**
+  * @brief  Fault history item.
+  * @brief  故障历史记录项。
+  */
+typedef struct
+{
+    uint32_t sequence;
+    chassis_fault_id_e id;
+    chassis_fault_level_e level;
+    chassis_fault_strategy_e strategy;
+    uint8_t active;
+} chassis_fault_history_t;
+
+/**
   * @brief  Bind the chassis runtime object used by fault-state query APIs.
   * @brief  绑定故障模块使用的底盘运行状态结构体。
   * @param[in] chassis_move_control Chassis runtime state.
@@ -109,5 +176,49 @@ void chassis_mech_fault_reset(chassis_move_t *chassis_move_control);
   * @param[in,out] chassis_move_update 底盘运行状态结构体。
   */
 void chassis_mech_fault_update(chassis_move_t *chassis_move_update);
+
+/**
+  * @brief  Get current highest-priority active fault id.
+  * @brief  获取当前最高优先级活动故障编号。
+  */
+chassis_fault_id_e chassis_fault_get_active_id(void);
+
+/**
+  * @brief  Get current highest active fault level.
+  * @brief  获取当前最高活动故障等级。
+  */
+chassis_fault_level_e chassis_fault_get_level(void);
+
+/**
+  * @brief  Get current selected fault strategy.
+  * @brief  获取当前故障处理策略。
+  */
+chassis_fault_strategy_e chassis_fault_get_strategy(void);
+
+/**
+  * @brief  Get one managed fault record.
+  * @brief  获取单个受管故障状态。
+  */
+const chassis_fault_record_t *chassis_fault_get_record(chassis_fault_id_e id);
+
+/**
+  * @brief  Manually confirm one recovered latched fault.
+  * @brief  人工确认并清除一个已经恢复的锁存故障。
+  * @retval 0 Confirm failed or source is still active.
+  * @retval 1 Confirm succeeded.
+  */
+uint8_t chassis_fault_confirm(chassis_fault_id_e id);
+
+/**
+  * @brief  Manually confirm all recovered latched faults.
+  * @brief  人工确认并清除所有已经恢复的锁存故障。
+  */
+uint8_t chassis_fault_confirm_all(void);
+
+/**
+  * @brief  Get fault history ring buffer.
+  * @brief  获取故障历史环形缓冲区。
+  */
+const chassis_fault_history_t *chassis_fault_get_history(uint8_t *count);
 
 #endif

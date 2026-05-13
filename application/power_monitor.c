@@ -1,3 +1,16 @@
+/**
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  * @file       power_monitor.c
+  * @brief      Battery voltage sampling and compensation helper.
+  * @brief      电池电压采样与电压补偿辅助模块。
+  * @note       Uses ADC3 channel 8 on PF10 to estimate the 24 V battery
+  *             voltage and generate a filtered compensation scale for chassis
+  *             motor current commands.
+  * @note       使用 PF10 的 ADC3 通道 8 估算 24 V 电池电压，并生成
+  *             底盘电机电流补偿比例。
+  *************************** JSUT-ROBOCON2026-R1 ***************************
+  */
+
 #include "power_monitor.h"
 
 #include "main.h"
@@ -19,6 +32,10 @@ static fp32 power_monitor_compensation_voltage = 24.0f;
 
 static uint16_t power_monitor_read_adc3_in8(void);
 
+/**
+  * @brief  Initialize PF10 analog input and ADC3 channel 8.
+  * @brief  初始化 PF10 模拟输入和 ADC3 通道 8。
+  */
 void power_monitor_init(void)
 {
     GPIO_InitTypeDef gpio_init = {0};
@@ -54,6 +71,10 @@ void power_monitor_init(void)
     power_monitor_inited = 1U;
 }
 
+/**
+  * @brief  Read and convert battery voltage.
+  * @brief  读取并换算电池电压。
+  */
 fp32 power_monitor_get_battery_voltage(void)
 {
     uint8_t i;
@@ -78,6 +99,10 @@ fp32 power_monitor_get_battery_voltage(void)
     return power_monitor_battery_voltage;
 }
 
+/**
+  * @brief  Calculate filtered voltage compensation scale.
+  * @brief  计算带滤波的电压补偿比例。
+  */
 fp32 power_monitor_get_voltage_compensation_scale(fp32 nominal_voltage,
                                                   fp32 deadband_voltage,
                                                   fp32 min_scale,
@@ -127,6 +152,10 @@ fp32 power_monitor_get_voltage_compensation_scale(fp32 nominal_voltage,
     return scale;
 }
 
+/**
+  * @brief  Read one ADC3 channel-8 conversion.
+  * @brief  读取一次 ADC3 通道 8 转换值。
+  */
 static uint16_t power_monitor_read_adc3_in8(void)
 {
     uint32_t timeout = POWER_MONITOR_ADC_TIMEOUT;

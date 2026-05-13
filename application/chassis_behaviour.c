@@ -11,13 +11,11 @@
 #include "detect_task.h"
 
 #include <stddef.h>
-#include <math.h>
 
 static uint8_t chassis_behaviour_lost_motor_count(void);
 static chassis_behaviour_e chassis_behaviour_get_auto_mode(void);
 
 static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo);
-static fp32 chassis_slew_limit_local(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt);
 static fp32 chassis_drive_get_wz_set(chassis_move_t *chassis_move_rc_to_vector);
 
 static void chassis_zero_force_control(fp32 *vx_set,
@@ -98,31 +96,6 @@ static fp32 chassis_rc_expo_local(int16_t input, int16_t deadband, fp32 expo)
     output = (1.0f - expo_ratio) * normalized + expo_ratio * normalized * normalized * normalized;
 
     return fp32_constrain(output, -1.0f, 1.0f);
-}
-
-static fp32 chassis_slew_limit_local(fp32 target, fp32 current, fp32 acc_up, fp32 acc_down, fp32 dt)
-{
-    fp32 delta = target - current;
-    fp32 limit = 0.0f;
-
-    if (delta >= 0.0f)
-    {
-        limit = acc_up * dt;
-        if (delta > limit)
-        {
-            delta = limit;
-        }
-    }
-    else
-    {
-        limit = acc_down * dt;
-        if (delta < -limit)
-        {
-            delta = -limit;
-        }
-    }
-
-    return current + delta;
 }
 
 void chassis_behaviour_mode_set(chassis_move_t *chassis_move_mode)
@@ -225,35 +198,10 @@ static void chassis_drive_control(fp32 *vx_set,
 static fp32 chassis_drive_get_wz_set(chassis_move_t *chassis_move_rc_to_vector)
 {
     fp32 wz_normalized = 0.0f;
-    fp32 wz_target = 0.0f;
 
     wz_normalized = chassis_rc_expo_local(chassis_move_rc_to_vector->chassis_RC->rc.ch[CHASSIS_WZ_CHANNEL],
                                           CHASSIS_RC_DEADLINE_LOCAL,
                                           CHASSIS_RC_EXPO);
-    wz_target = (-CHASSIS_WZ_RC_SEN) * (wz_normalized * 660.0f);
 
-    if (wz_normalized == 0.0f)
-    {
-        chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out =
-            chassis_slew_limit_local(0.0f,
-                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out,
-                                     CHASSIS_WZ_ZERO_DEC,
-                                     CHASSIS_WZ_ZERO_DEC,
-                                     CHASSIS_CONTROL_TIME);
-        if (fabsf(chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out) < CHASSIS_WZ_ZERO_SNAP)
-        {
-            chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out = 0.0f;
-        }
-    }
-    else
-    {
-        chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out =
-            chassis_slew_limit_local(wz_target,
-                                     chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out,
-                                     CHASSIS_WZ_ACC_UP,
-                                     CHASSIS_WZ_ACC_DOWN,
-                                     CHASSIS_CONTROL_TIME);
-    }
-
-    return chassis_move_rc_to_vector->chassis_cmd_slow_set_wz.out;
+    return (-CHASSIS_WZ_RC_SEN) * (wz_normalized * 660.0f);
 }
