@@ -116,3 +116,14 @@
   - 优化总电流限制策略，按各轮速度需求分配电流预算，再进行总电流兜底限幅。
   - 重排 Keil 工程分组，按 `Startup`、`CubeMX/Core`、`BSP/Board`、`Application/System`、`Application/Communication`、`Application/Chassis`、`Application/UI_Status`、`Components/Devices`、`Components/Algorithm`、`Components/Controller` 分类。
   - 补充 `oled_task`、`power_monitor`、`CAN_receive`、`struct_typedef`、`chassis_trajectory`、`oled_ssd1306` 等文件的中英文注释。
+- 2026-05-14
+  - 完善 CAN 发送可靠性：CAN_cmd_* 统一改为带检查的发送封装，增加 HAL_CAN_AddTxMessage 返回值检查。
+  - 增加 CAN 邮箱满处理策略：发送邮箱满时丢弃旧帧并优先发送最新控制帧，减少底盘指令拖尾。
+  - 增加 CAN 异常恢复逻辑：支持 bus-off、error passive、未启动等状态检测，并重新初始化 CAN、恢复滤波器和接收中断。
+  - 增加 CAN 发送健康统计：记录发送次数、失败次数、邮箱满次数、bus-off 次数、error passive 次数和最近错误码。
+  - 增强电源管理模块：新增电池侧电流估算、功率估算、最低电压、峰值电流和峰值功率记录。
+  - 增加电源降额策略：低电压、电池电流过高、峰值功率过高时自动降低底盘电流输出。
+  - 预留真实电流传感器接口：后续接入霍尔电流传感器或电流采样模块后，可直接写入真实电池侧电流。
+  - OLED 状态页更新：电流显示改为电池侧总电流估算值，并新增电池侧功率显示。
+  - 修复 IMU 磁力计更新判断问题：将 mag_update_flag 的赋值判断改为只读判断，避免误改标志位。
+  - 重构 IMU 磁力计处理流程：新增磁力计数据读取与有效性检查，AHRS 更新成功后才刷新欧拉角。
