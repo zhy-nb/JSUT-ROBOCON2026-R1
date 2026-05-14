@@ -60,8 +60,8 @@ jsut-robocon2026-r1\main.o: ../Inc/tim.h
 jsut-robocon2026-r1\main.o: ../Inc/usart.h
 jsut-robocon2026-r1\main.o: ../Inc/gpio.h
 jsut-robocon2026-r1\main.o: ../bsp/boards/bsp_can.h
-jsut-robocon2026-r1\main.o: ../application/struct_typedef.h
 jsut-robocon2026-r1\main.o: ../bsp/boards/bsp_delay.h
+jsut-robocon2026-r1\main.o: ../application/struct_typedef.h
 jsut-robocon2026-r1\main.o: ../application/remote_control.h
 jsut-robocon2026-r1\main.o: ../bsp/boards/bsp_rc.h
 jsut-robocon2026-r1\main.o: ../application/calibrate_task.h

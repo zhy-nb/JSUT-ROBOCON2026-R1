@@ -1,9 +1,9 @@
 /**
   *************************** JSUT-ROBOCON2026-R1 ***************************
   * @file       CAN_receive.c
-  * @brief      CAN µç»ú·´À¡½âÎöÓë¿ØÖÆÖ¸Áî·¢ËÍÊµÏÖ
-  * @note       ´¦Àí FIFO0 »Øµ÷ÖĞµÄ·´À¡¸üĞÂ£¬²¢Í³Ò»·â×°µ×ÅÌÓëÀ©Õ¹
-  *             µç»úµÄµçÁ÷¿ØÖÆ±¨ÎÄ·¢ËÍÂß¼­¡£
+  * @brief      CAN ç”µæœºåé¦ˆè§£æä¸æ§åˆ¶æŒ‡ä»¤å‘é€å®ç°
+  * @note       å¤„ç† FIFO0 å›è°ƒä¸­çš„åé¦ˆæ›´æ–°ï¼Œå¹¶ç»Ÿä¸€å°è£…åº•ç›˜ä¸æ‰©å±•
+  *             ç”µæœºçš„ç”µæµæ§åˆ¶æŠ¥æ–‡å‘é€é€»è¾‘ã€‚
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
@@ -12,12 +12,13 @@
 #include "cmsis_os.h"
 #include "main.h"
 #include "detect_task.h"
+#include "bsp_can.h"
 
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
 
 /**
-  * @brief  ´Ó 8 ×Ö½Úµç»ú·´À¡Ö¡ÖĞÌáÈ¡ RM µç»ú³£ÓÃ²âÁ¿Á¿
+  * @brief  ä» 8 å­—èŠ‚ç”µæœºåé¦ˆå¸§ä¸­æå– RM ç”µæœºå¸¸ç”¨æµ‹é‡é‡
   */
 #define get_motor_measure(ptr, data)                                    \
     {                                                                   \
@@ -29,9 +30,9 @@ extern CAN_HandleTypeDef hcan2;
     }
 
 /**
-  * @brief  µç»ú·´À¡»º´æË³Ğò
+  * @brief  ç”µæœºåé¦ˆç¼“å­˜é¡ºåº
   *
-  * @note   0~3 Îªµ×ÅÌËÄ¸ö 3508£¬4~5 Îª yaw/pitch 6020£¬6 Îª²¦µ¯ 2006¡£
+  * @note   0~3 ä¸ºåº•ç›˜å››ä¸ª 3508ï¼Œ4~5 ä¸º yaw/pitch 6020ï¼Œ6 ä¸ºæ‹¨å¼¹ 2006ã€‚
   */
 static motor_measure_t motor_chassis[7];
 
@@ -42,11 +43,243 @@ static uint8_t gimbal_can1_send_data[8];
 static CAN_TxHeaderTypeDef chassis_tx_message;
 static uint8_t chassis_can_send_data[8];
 
+/* ----------------------- CAN Tx Reliability -----------------------------
+ * CAN_TX_MAILBOX_ALL:
+ *   STM32 bxCAN has three hardware Tx mailboxes. When all mailboxes are full,
+ *   the newest chassis command is more useful than stale queued commands.
+ * CAN_TX_RECOVER_GAP_MS:
+ *   Minimum interval between two bus recoveries. This avoids repeatedly
+ *   restarting CAN while the physical bus is still shorted or disconnected.
+ * CAN_TX_RETRY_MAX:
+ *   One normal attempt plus one retry after mailbox cleanup/recovery.
+ */
+#define CAN_TX_MAILBOX_ALL             (CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2)
+#define CAN_TX_RECOVER_GAP_MS          20U
+#define CAN_TX_RETRY_MAX               2U
+
 /**
-  * @brief  CAN FIFO0 ½ÓÊÕ»Øµ÷
+  * @brief  CAN1/CAN2 transmit health counters.
+  * @brief  CAN1/CAN2 å‘é€å¥åº·çŠ¶æ€è®¡æ•°å™¨ã€‚
+  */
+static can_tx_status_t can1_tx_status;
+static can_tx_status_t can2_tx_status;
+
+/**
+  * @brief  æ ¹æ® CAN å¥æŸ„è·å–å¯¹åº”å‘é€çŠ¶æ€ç»Ÿè®¡ç¼“å­˜
+  */
+static can_tx_status_t *CAN_get_mutable_tx_status(CAN_HandleTypeDef *hcan)
+{
+    if (hcan == NULL)
+    {
+        return NULL;
+    }
+
+    if (hcan->Instance == CAN1)
+    {
+        return &can1_tx_status;
+    }
+
+    if (hcan->Instance == CAN2)
+    {
+        return &can2_tx_status;
+    }
+
+    return NULL;
+}
+
+/**
+  * @brief  è®°å½•å½“å‰ CAN é”™è¯¯å¯„å­˜å™¨ä¸ HAL é”™è¯¯ç 
+  */
+static void CAN_record_bus_status(CAN_HandleTypeDef *hcan, can_tx_status_t *status)
+{
+    uint32_t esr;
+    uint32_t hal_error;
+
+    if ((hcan == NULL) || (hcan->Instance == NULL) || (status == NULL))
+    {
+        return;
+    }
+
+    esr = hcan->Instance->ESR;
+    hal_error = HAL_CAN_GetError(hcan);
+
+    status->last_esr = esr;
+    status->last_hal_error = hal_error;
+
+    if (((esr & CAN_ESR_EWGF) != 0U) || ((hal_error & HAL_CAN_ERROR_EWG) != 0U))
+    {
+        status->tx_error_warning_count++;
+    }
+
+    if (((esr & CAN_ESR_EPVF) != 0U) || ((hal_error & HAL_CAN_ERROR_EPV) != 0U))
+    {
+        status->tx_error_passive_count++;
+    }
+
+    if (((esr & CAN_ESR_BOFF) != 0U) || ((hal_error & HAL_CAN_ERROR_BOF) != 0U))
+    {
+        status->tx_bus_off_count++;
+    }
+}
+
+/**
+  * @brief  åˆ¤æ–­ CAN æ˜¯å¦éœ€è¦é‡æ–°å¯åŠ¨æ¢å¤
+  */
+static uint8_t CAN_need_recover(CAN_HandleTypeDef *hcan)
+{
+    uint32_t esr;
+    uint32_t hal_error;
+    HAL_CAN_StateTypeDef state;
+
+    if ((hcan == NULL) || (hcan->Instance == NULL))
+    {
+        return 0U;
+    }
+
+    esr = hcan->Instance->ESR;
+    hal_error = HAL_CAN_GetError(hcan);
+    state = HAL_CAN_GetState(hcan);
+
+    if ((esr & (CAN_ESR_BOFF | CAN_ESR_EPVF)) != 0U)
+    {
+        return 1U;
+    }
+
+    if ((hal_error & (HAL_CAN_ERROR_BOF | HAL_CAN_ERROR_EPV |
+                      HAL_CAN_ERROR_NOT_INITIALIZED | HAL_CAN_ERROR_NOT_READY |
+                      HAL_CAN_ERROR_NOT_STARTED | HAL_CAN_ERROR_TIMEOUT)) != 0U)
+    {
+        return 1U;
+    }
+
+    if (state != HAL_CAN_STATE_LISTENING)
+    {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/**
+  * @brief  æŒ‰æœ€å°é—´éš”å°è¯•æ¢å¤ CANï¼Œé¿å…å¼‚å¸¸çº¿æŸä¸‹åå¤é‡å¯æ€»çº¿
+  */
+static uint8_t CAN_try_recover(CAN_HandleTypeDef *hcan, can_tx_status_t *status)
+{
+    uint32_t now;
+    can_recover_result_e result;
+
+    if ((hcan == NULL) || (status == NULL))
+    {
+        return 0U;
+    }
+
+    now = HAL_GetTick();
+    if ((status->last_recover_tick != 0U) &&
+        ((now - status->last_recover_tick) < CAN_TX_RECOVER_GAP_MS))
+    {
+        return 0U;
+    }
+
+    status->last_recover_tick = now;
+    status->tx_recover_count++;
+    result = can_recover(hcan);
+    status->last_recover_result = (uint8_t)result;
+    CAN_record_bus_status(hcan, status);
+
+    return (result == CAN_RECOVER_OK) ? 1U : 0U;
+}
+
+/**
+  * @brief  å¸¦æ£€æŸ¥ä¸æ¢å¤ç­–ç•¥çš„ CAN å‘é€å°è£…
   *
-  * @note   ÊÕµ½µç»ú·´À¡Ö¡ºó£¬ÏÈ°Ñ±ê×¼Ö¡ ID Ó³Éäµ½ `motor_chassis[]`
-  *         ÖĞ¶ÔÓ¦µÄ²ÛÎ»£¬ÔÙ´¥·¢¶ÔÓ¦Éè±¸µÄµôÏß¼ì²â¹³×Ó¡£
+  * @note   é‚®ç®±æ»¡æ—¶ä¸¢å¼ƒæ—§çš„å¾…å‘å¸§å¹¶é‡è¯•ã€‚åº•ç›˜ç”µæµå¸§æ˜¯å‘¨æœŸå‘½ä»¤ï¼Œ
+  *         æ–°å¸§ä¼˜å…ˆçº§é«˜äºæ—§å¸§ï¼Œé¿å…æ—§ç”µæµæŒ‡ä»¤æ»ç•™é€ æˆåŠ¨ä½œæ‹–å°¾ã€‚
+  */
+static uint8_t CAN_send_checked(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *tx_header, uint8_t *tx_data)
+{
+    uint32_t send_mail_box = 0U;
+    uint8_t retry;
+    uint8_t fail_recorded = 0U;
+    can_tx_status_t *status;
+
+    status = CAN_get_mutable_tx_status(hcan);
+    if ((hcan == NULL) || (tx_header == NULL) || (tx_data == NULL) || (status == NULL))
+    {
+        return 0U;
+    }
+
+    status->tx_request_count++;
+    status->last_std_id = tx_header->StdId;
+    CAN_record_bus_status(hcan, status);
+
+    if (CAN_need_recover(hcan) != 0U)
+    {
+        (void)CAN_try_recover(hcan, status);
+    }
+
+    for (retry = 0U; retry < CAN_TX_RETRY_MAX; retry++)
+    {
+        if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0U)
+        {
+            status->tx_mailbox_full_count++;
+            (void)HAL_CAN_AbortTxRequest(hcan, CAN_TX_MAILBOX_ALL);
+            continue;
+        }
+
+        if (HAL_CAN_AddTxMessage(hcan, tx_header, tx_data, &send_mail_box) == HAL_OK)
+        {
+            status->tx_success_count++;
+            return 1U;
+        }
+
+        status->tx_fail_count++;
+        fail_recorded = 1U;
+        CAN_record_bus_status(hcan, status);
+
+        if (CAN_need_recover(hcan) == 0U)
+        {
+            continue;
+        }
+
+        if (CAN_try_recover(hcan, status) == 0U)
+        {
+            break;
+        }
+    }
+
+    if (fail_recorded == 0U)
+    {
+        status->tx_fail_count++;
+    }
+
+    return 0U;
+}
+
+/**
+  * @brief  è·å– CAN å‘é€å¥åº·çŠ¶æ€
+  *
+  * @param[in] can_index 1 è¡¨ç¤º CAN1ï¼Œ2 è¡¨ç¤º CAN2
+  */
+const can_tx_status_t *CAN_get_tx_status(uint8_t can_index)
+{
+    if (can_index == 1U)
+    {
+        return &can1_tx_status;
+    }
+
+    if (can_index == 2U)
+    {
+        return &can2_tx_status;
+    }
+
+    return NULL;
+}
+
+/**
+  * @brief  CAN FIFO0 æ¥æ”¶å›è°ƒ
+  *
+  * @note   æ”¶åˆ°ç”µæœºåé¦ˆå¸§åï¼Œå…ˆæŠŠæ ‡å‡†å¸§ ID æ˜ å°„åˆ° `motor_chassis[]`
+  *         ä¸­å¯¹åº”çš„æ§½ä½ï¼Œå†è§¦å‘å¯¹åº”è®¾å¤‡çš„æ‰çº¿æ£€æµ‹é’©å­ã€‚
   */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
@@ -67,7 +300,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         {
             static uint8_t i = 0;
 
-            // ½«±ê×¼Ö¡ ID ×ª»»Îª motor_chassis[] ÖĞµÄÊı×éË÷Òı¡£
+            // å°†æ ‡å‡†å¸§ ID è½¬æ¢ä¸º motor_chassis[] ä¸­çš„æ•°ç»„ç´¢å¼•ã€‚
             i = rx_header.StdId - CAN_3508_M1_ID;
             get_motor_measure(&motor_chassis[i], rx_data);
             detect_hook(CHASSIS_MOTOR1_TOE + i);
@@ -82,12 +315,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 }
 
 /**
-  * @brief  ·¢ËÍÔÆÌ¨Ïà¹Øµç»ú¿ØÖÆµçÁ÷
+  * @brief  å‘é€äº‘å°ç›¸å…³ç”µæœºæ§åˆ¶ç”µæµ
   */
 void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
 {
-    uint32_t send_mail_box;
-
     gimbal_tx_message.StdId = CAN_GIMBAL_ALL_ID;
     gimbal_tx_message.IDE = CAN_ID_STD;
     gimbal_tx_message.RTR = CAN_RTR_DATA;
@@ -101,16 +332,14 @@ void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
     gimbal_can_send_data[6] = (rev >> 8);
     gimbal_can_send_data[7] = rev;
 
-    HAL_CAN_AddTxMessage(&GIMBAL_CAN, &gimbal_tx_message, gimbal_can_send_data, &send_mail_box);
+    (void)CAN_send_checked(&GIMBAL_CAN, &gimbal_tx_message, gimbal_can_send_data);
 }
 
 /**
-  * @brief  Í¨¹ı CAN1 ·¢ËÍ 0x1FF µç»ú¿ØÖÆµçÁ÷
+  * @brief  é€šè¿‡ CAN1 å‘é€ 0x1FF ç”µæœºæ§åˆ¶ç”µæµ
   */
 void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev)
 {
-    uint32_t send_mail_box;
-
     gimbal_can1_tx_message.StdId = CAN_GIMBAL_ALL_ID;
     gimbal_can1_tx_message.IDE = CAN_ID_STD;
     gimbal_can1_tx_message.RTR = CAN_RTR_DATA;
@@ -124,18 +353,16 @@ void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, int16_t r
     gimbal_can1_send_data[6] = (rev >> 8);
     gimbal_can1_send_data[7] = rev;
 
-    HAL_CAN_AddTxMessage(&CHASSIS_CAN, &gimbal_can1_tx_message, gimbal_can1_send_data, &send_mail_box);
+    (void)CAN_send_checked(&CHASSIS_CAN, &gimbal_can1_tx_message, gimbal_can1_send_data);
 }
 
 /**
-  * @brief  Í¨¹ı CAN1 ·¢ËÍ 0x207 µç»ú¿ØÖÆµçÁ÷
+  * @brief  é€šè¿‡ CAN1 å‘é€ 0x207 ç”µæœºæ§åˆ¶ç”µæµ
   *
-  * @note   0x205~0x208 ¹²ÓÃ 0x1FF Ö¸ÁîÖ¡£¬ÕâÀïÖ»Ìî³äµÚÈıÂ·µçÁ÷¡£
+  * @note   0x205~0x208 å…±ç”¨ 0x1FF æŒ‡ä»¤å¸§ï¼Œè¿™é‡Œåªå¡«å……ç¬¬ä¸‰è·¯ç”µæµã€‚
   */
 void CAN_cmd_motor207_can1(int16_t current)
 {
-    uint32_t send_mail_box;
-
     gimbal_can1_tx_message.StdId = CAN_GIMBAL_ALL_ID;
     gimbal_can1_tx_message.IDE = CAN_ID_STD;
     gimbal_can1_tx_message.RTR = CAN_RTR_DATA;
@@ -149,16 +376,14 @@ void CAN_cmd_motor207_can1(int16_t current)
     gimbal_can1_send_data[6] = 0;
     gimbal_can1_send_data[7] = 0;
 
-    HAL_CAN_AddTxMessage(&CHASSIS_CAN, &gimbal_can1_tx_message, gimbal_can1_send_data, &send_mail_box);
+    (void)CAN_send_checked(&CHASSIS_CAN, &gimbal_can1_tx_message, gimbal_can1_send_data);
 }
 
 /**
-  * @brief  ·¢ËÍ 0x700 CAN °ü£¬´¥·¢ 3508 ¿ìËÙÉèÖÃ ID
+  * @brief  å‘é€ 0x700 CAN åŒ…ï¼Œè§¦å‘ 3508 å¿«é€Ÿè®¾ç½® ID
   */
 void CAN_cmd_chassis_reset_ID(void)
 {
-    uint32_t send_mail_box;
-
     chassis_tx_message.StdId = 0x700;
     chassis_tx_message.IDE = CAN_ID_STD;
     chassis_tx_message.RTR = CAN_RTR_DATA;
@@ -172,16 +397,14 @@ void CAN_cmd_chassis_reset_ID(void)
     chassis_can_send_data[6] = 0;
     chassis_can_send_data[7] = 0;
 
-    HAL_CAN_AddTxMessage(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
+    (void)CAN_send_checked(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data);
 }
 
 /**
-  * @brief  ·¢ËÍµ×ÅÌËÄ¸ö 3508 µç»ú¿ØÖÆµçÁ÷
+  * @brief  å‘é€åº•ç›˜å››ä¸ª 3508 ç”µæœºæ§åˆ¶ç”µæµ
   */
 void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4)
 {
-    uint32_t send_mail_box;
-
     chassis_tx_message.StdId = CAN_CHASSIS_ALL_ID;
     chassis_tx_message.IDE = CAN_ID_STD;
     chassis_tx_message.RTR = CAN_RTR_DATA;
@@ -195,11 +418,11 @@ void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t mot
     chassis_can_send_data[6] = motor4 >> 8;
     chassis_can_send_data[7] = motor4;
 
-    HAL_CAN_AddTxMessage(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data, &send_mail_box);
+    (void)CAN_send_checked(&CHASSIS_CAN, &chassis_tx_message, chassis_can_send_data);
 }
 
 /**
-  * @brief  »ñÈ¡ yaw 6020 µç»ú·´À¡Êı¾İÖ¸Õë
+  * @brief  è·å– yaw 6020 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
   */
 const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
 {
@@ -207,7 +430,7 @@ const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
 }
 
 /**
-  * @brief  »ñÈ¡ pitch 6020 µç»ú·´À¡Êı¾İÖ¸Õë
+  * @brief  è·å– pitch 6020 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
   */
 const motor_measure_t *get_pitch_gimbal_motor_measure_point(void)
 {
@@ -215,7 +438,7 @@ const motor_measure_t *get_pitch_gimbal_motor_measure_point(void)
 }
 
 /**
-  * @brief  »ñÈ¡²¦µ¯ 2006 µç»ú·´À¡Êı¾İÖ¸Õë
+  * @brief  è·å–æ‹¨å¼¹ 2006 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
   */
 const motor_measure_t *get_trigger_motor_measure_point(void)
 {
@@ -223,9 +446,9 @@ const motor_measure_t *get_trigger_motor_measure_point(void)
 }
 
 /**
-  * @brief  »ñÈ¡µ×ÅÌ 3508 µç»ú·´À¡Êı¾İÖ¸Õë
+  * @brief  è·å–åº•ç›˜ 3508 ç”µæœºåé¦ˆæ•°æ®æŒ‡é’ˆ
   *
-  * @param[in] i µç»ú±àºÅ£¬·¶Î§ [0, 3]
+  * @param[in] i ç”µæœºç¼–å·ï¼ŒèŒƒå›´ [0, 3]
   */
 const motor_measure_t *get_chassis_motor_measure_point(uint8_t i)
 {

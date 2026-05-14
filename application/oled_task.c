@@ -4,9 +4,9 @@
   * @brief      OLED status page task.
   * @brief      OLED 状态页任务实现。
   * @note       Displays chassis connection state, fault/degraded state,
-  *             battery voltage, motor current and IMU temperature.
+  *             battery voltage, battery current/power and IMU temperature.
   * @note       用于显示底盘连接状态、故障/降级状态、电池电压、
-  *             电机电流和 IMU 温度。
+  *             电池侧电流/功率和 IMU 温度。
   *************************** JSUT-ROBOCON2026-R1 ***************************
   */
 
@@ -22,25 +22,21 @@
 #include "power_monitor.h"
 
 #define OLED_CHASSIS_MOTOR_NUM 4U
-#define OLED_MOTOR_CURRENT_FULL_SCALE 16384
-#define OLED_MOTOR_CURRENT_MAX_A_X10  200
-
 static void oled_copy_text(char **cursor, const char *text);
 static void oled_append_uint(char **cursor, uint32_t value);
-static int32_t oled_abs_i32(int32_t value);
 static uint8_t oled_get_motor_lost_mask(void);
 static uint8_t oled_get_motor_lost_count(uint8_t lost_mask);
 static uint8_t oled_is_all_connected(uint8_t motor_lost_mask, uint8_t rc_lost);
-static int32_t oled_get_average_motor_current_x10(void);
-static int32_t oled_get_total_motor_current_x10(void);
+static int32_t oled_get_battery_current_x10(void);
+static uint32_t oled_get_battery_power_w(void);
 static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask);
 static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x10);
 static void oled_format_voltage_total_current_line(char *buffer,
                                                    fp32 voltage,
                                                    int32_t total_current_x10);
-static void oled_format_total_current_temperature_line(char *buffer,
-                                                       int32_t total_current_x10,
-                                                       fp32 temperature);
+static void oled_format_power_temperature_line(char *buffer,
+                                               uint32_t power_w,
+                                               fp32 temperature);
 static void oled_append_fault_short(char **cursor, chassis_fault_id_e id);
 static void oled_format_mode_line(char *buffer,
                                   chassis_behaviour_e mode,
@@ -93,7 +89,7 @@ void oled_task(void const *argument)
 
             oled_format_voltage_total_current_line(line_text,
                                                    power_monitor_get_battery_voltage(),
-                                                   oled_get_total_motor_current_x10());
+                                                   oled_get_battery_current_x10());
             oled_ssd1306_write_string(0, 32, line_text);
 
             oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
@@ -105,12 +101,12 @@ void oled_task(void const *argument)
 
             oled_format_power_line(line_text,
                                    power_monitor_get_battery_voltage(),
-                                   oled_get_average_motor_current_x10());
+                                   oled_get_battery_current_x10());
             oled_ssd1306_write_string(0, 16, line_text);
 
-            oled_format_total_current_temperature_line(line_text,
-                                                       oled_get_total_motor_current_x10(),
-                                                       get_imu_temperature());
+            oled_format_power_temperature_line(line_text,
+                                               oled_get_battery_power_w(),
+                                               get_imu_temperature());
             oled_ssd1306_write_string(0, 32, line_text);
 
             oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
@@ -132,7 +128,7 @@ void oled_task(void const *argument)
 
             oled_format_voltage_total_current_line(line_text,
                                                    power_monitor_get_battery_voltage(),
-                                                   oled_get_total_motor_current_x10());
+                                                   oled_get_battery_current_x10());
             oled_ssd1306_write_string(0, 32, line_text);
 
             oled_format_mode_line(line_text, chassis_behaviour_get_mode(), motor_lost_mask, rc_lost);
@@ -190,16 +186,6 @@ static void oled_append_uint(char **cursor, uint32_t value)
     }
 }
 
-static int32_t oled_abs_i32(int32_t value)
-{
-    if (value < 0)
-    {
-        return -value;
-    }
-
-    return value;
-}
-
 /**
   * @brief  Build bitmask for currently lost chassis motors.
   * @brief  生成当前掉线底盘电机位掩码。
@@ -251,42 +237,41 @@ static uint8_t oled_get_motor_lost_count(uint8_t lost_mask)
     return count;
 }
 
-static int32_t oled_get_average_motor_current_x10(void)
+/**
+  * @brief  Get battery-side current in 0.1 A units.
+  * @brief  获取电池侧总电流，单位 0.1 A。
+  *
+  * @note   The current source may be estimated or sensor-sampled by
+  *         power_monitor. OLED only displays the latest value.
+  * @note   电流来源可能是估算值或真实传感器采样值，OLED 只显示
+  *         power_monitor 当前输出。
+  */
+static int32_t oled_get_battery_current_x10(void)
 {
-    uint8_t i;
-    int32_t current_sum = 0;
-    int32_t current_average = 0;
-    const motor_measure_t *motor_measure;
+    fp32 current = power_monitor_get_battery_current();
 
-    for (i = 0U; i < OLED_CHASSIS_MOTOR_NUM; i++)
+    if (current >= 0.0f)
     {
-        motor_measure = get_chassis_motor_measure_point(i);
-        current_sum += oled_abs_i32(motor_measure->given_current);
+        return (int32_t)(current * 10.0f + 0.5f);
     }
 
-    current_average = current_sum / (int32_t)OLED_CHASSIS_MOTOR_NUM;
-    return (current_average * OLED_MOTOR_CURRENT_MAX_A_X10 + (OLED_MOTOR_CURRENT_FULL_SCALE / 2)) /
-           OLED_MOTOR_CURRENT_FULL_SCALE;
+    return (int32_t)(current * 10.0f - 0.5f);
 }
 
 /**
-  * @brief  Estimate total motor feedback current in 0.1 A units.
-  * @brief  估算四个电机反馈总电流，单位 0.1 A。
+  * @brief  Get battery-side power in W.
+  * @brief  获取电池侧功率，单位 W。
   */
-static int32_t oled_get_total_motor_current_x10(void)
+static uint32_t oled_get_battery_power_w(void)
 {
-    uint8_t i;
-    int32_t current_sum = 0;
-    const motor_measure_t *motor_measure;
+    fp32 power = power_monitor_get_battery_power();
 
-    for (i = 0U; i < OLED_CHASSIS_MOTOR_NUM; i++)
+    if (power <= 0.0f)
     {
-        motor_measure = get_chassis_motor_measure_point(i);
-        current_sum += oled_abs_i32(motor_measure->given_current);
+        return 0U;
     }
 
-    return (current_sum * OLED_MOTOR_CURRENT_MAX_A_X10 + (OLED_MOTOR_CURRENT_FULL_SCALE / 2)) /
-           OLED_MOTOR_CURRENT_FULL_SCALE;
+    return (uint32_t)(power + 0.5f);
 }
 
 static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask)
@@ -315,6 +300,10 @@ static void oled_format_motor_lost_line(char *buffer, uint8_t lost_mask)
     *p = '\0';
 }
 
+/**
+  * @brief  Format normal power line: voltage + battery current.
+  * @brief  格式化正常状态电源行：电压 + 电池侧电流。
+  */
 static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x10)
 {
     int32_t voltage_x10 = 0;
@@ -344,9 +333,7 @@ static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x
     *p++ = '.';
     *p++ = (char)('0' + voltage_frac);
     *p++ = ' ';
-    *p++ = 'C';
-    *p++ = 'U';
-    *p++ = 'R';
+    oled_copy_text(&p, " BAT");
 
     if (current_x10 < 0)
     {
@@ -364,6 +351,10 @@ static void oled_format_power_line(char *buffer, fp32 voltage, int32_t current_x
     *p = '\0';
 }
 
+/**
+  * @brief  Format compact voltage/current line for fault pages.
+  * @brief  为故障页格式化紧凑的电压/电流行。
+  */
 static void oled_format_voltage_total_current_line(char *buffer,
                                                    fp32 voltage,
                                                    int32_t total_current_x10)
@@ -394,7 +385,7 @@ static void oled_format_voltage_total_current_line(char *buffer,
     oled_append_uint(&p, (uint32_t)voltage_whole);
     *p++ = '.';
     *p++ = (char)('0' + voltage_frac);
-    oled_copy_text(&p, " SUM");
+    oled_copy_text(&p, " BAT");
 
     if (total_current_x10 < 0)
     {
@@ -412,32 +403,22 @@ static void oled_format_voltage_total_current_line(char *buffer,
     *p = '\0';
 }
 
-static void oled_format_total_current_temperature_line(char *buffer,
-                                                       int32_t total_current_x10,
-                                                       fp32 temperature)
+/**
+  * @brief  Format battery power and IMU temperature line.
+  * @brief  格式化电池侧功率和 IMU 温度行。
+  */
+static void oled_format_power_temperature_line(char *buffer,
+                                               uint32_t power_w,
+                                               fp32 temperature)
 {
-    int32_t current_whole = 0;
-    int32_t current_frac = 0;
     int32_t temp_x10 = 0;
     int32_t temp_whole = 0;
     int32_t temp_frac = 0;
     char *p = buffer;
 
-    oled_copy_text(&p, "SUM");
-
-    if (total_current_x10 < 0)
-    {
-        *p++ = '-';
-        total_current_x10 = -total_current_x10;
-    }
-
-    current_whole = total_current_x10 / 10;
-    current_frac = total_current_x10 % 10;
-
-    oled_append_uint(&p, (uint32_t)current_whole);
-    *p++ = '.';
-    *p++ = (char)('0' + current_frac);
-    oled_copy_text(&p, "A T");
+    *p++ = 'P';
+    oled_append_uint(&p, power_w);
+    oled_copy_text(&p, "W T");
 
     if (temperature >= 0.0f)
     {

@@ -23,6 +23,7 @@
 #include "calibrate_task.h"
 #include "detect_task.h"
 
+#include <stddef.h>
 
 #define IMU_temp_PWM(pwm)  imu_pwm_set(pwm)                    // IMU 温控 PWM 输出
 
@@ -59,6 +60,14 @@ static void imu_temp_control(fp32 temp);
   * @brief  根据更新标志启动下一次 SPI DMA 读取
   */
 static void imu_cmd_spi_dma(void);
+/**
+  * @brief  读取一次可用的 IST8310 磁力计数据
+  */
+static uint8_t imu_update_mag_if_ready(void);
+/**
+  * @brief  判断磁力计数据是否处于合理范围
+  */
+static uint8_t imu_mag_is_valid(const fp32 mag[3]);
 
 
 
@@ -106,6 +115,14 @@ static pid_type_def imu_temp_pid;
 
 static const float timing_time = 0.001f;   // 任务运行周期，单位 s
 
+/* ----------------------- Magnetometer Validation -------------------------
+ * The IST8310 data-ready flag only means a sample is available. Before using
+ * it in AHRS, check the magnetic-field norm to reject all-zero communication
+ * failures and obvious saturation values.
+ */
+#define INS_MAG_MIN_VALID_NORM2 (5.0f * 5.0f)
+#define INS_MAG_MAX_VALID_NORM2 (300.0f * 300.0f)
+
 
 // 加速度计低通滤波状态
 static fp32 accel_fliter_1[3] = {0.0f, 0.0f, 0.0f};
@@ -145,6 +162,15 @@ void INS_task(void const *pvParameters)
     }
 
     BMI088_read(bmi088_real_data.gyro, bmi088_real_data.accel, &bmi088_real_data.temp);
+    ist8310_read_mag(ist8310_real_data.mag);
+    if (imu_mag_is_valid(ist8310_real_data.mag) != 0U)
+    {
+        ist8310_real_data.status |= 1 << IST8310_DATA_READY_BIT;
+    }
+    else
+    {
+        ist8310_real_data.status &= ~(1 << IST8310_DATA_READY_BIT);
+    }
     // 对原始数据做安装方向旋转和零漂修正。
     imu_cali_slove(INS_gyro, INS_accel, INS_mag, &bmi088_real_data, &ist8310_real_data);
 
@@ -173,6 +199,16 @@ void INS_task(void const *pvParameters)
     
     while (1)
     {
+        /*
+         * These flags describe which sensor payloads were actually refreshed
+         * in this loop. They keep data acquisition, filtering and AHRS update
+         * separated, so a magnetometer flag check cannot accidentally become
+         * part of attitude calculation.
+         */
+        uint8_t gyro_updated = 0U;
+        uint8_t accel_updated = 0U;
+        uint8_t mag_updated = 0U;
+
         // 等待本轮 SPI DMA 读取结束。
         while (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) != pdPASS)
         {
@@ -183,12 +219,14 @@ void INS_task(void const *pvParameters)
         {
             gyro_update_flag &= ~(1 << IMU_NOTIFY_SHFITS);
             BMI088_gyro_read_over(gyro_dma_rx_buf + BMI088_GYRO_RX_BUF_DATA_OFFSET, bmi088_real_data.gyro);
+            gyro_updated = 1U;
         }
 
         if(accel_update_flag & (1 << IMU_UPDATE_SHFITS))
         {
             accel_update_flag &= ~(1 << IMU_UPDATE_SHFITS);
             BMI088_accel_read_over(accel_dma_rx_buf + BMI088_ACCEL_RX_BUF_DATA_OFFSET, bmi088_real_data.accel, &bmi088_real_data.time);
+            accel_updated = 1U;
 
         }
 
@@ -199,41 +237,112 @@ void INS_task(void const *pvParameters)
             imu_temp_control(bmi088_real_data.temp);
         }
 
+        mag_updated = imu_update_mag_if_ready();
+
         // 对新一轮原始数据做安装方向旋转和零漂修正。
         imu_cali_slove(INS_gyro, INS_accel, INS_mag, &bmi088_real_data, &ist8310_real_data);
 
-
         // 对加速度做低通滤波，降低姿态解算抖动。
-        accel_fliter_1[0] = accel_fliter_2[0];
-        accel_fliter_2[0] = accel_fliter_3[0];
-
-        accel_fliter_3[0] = accel_fliter_2[0] * fliter_num[0] + accel_fliter_1[0] * fliter_num[1] + INS_accel[0] * fliter_num[2];
-
-        accel_fliter_1[1] = accel_fliter_2[1];
-        accel_fliter_2[1] = accel_fliter_3[1];
-
-        accel_fliter_3[1] = accel_fliter_2[1] * fliter_num[0] + accel_fliter_1[1] * fliter_num[1] + INS_accel[1] * fliter_num[2];
-
-        accel_fliter_1[2] = accel_fliter_2[2];
-        accel_fliter_2[2] = accel_fliter_3[2];
-
-        accel_fliter_3[2] = accel_fliter_2[2] * fliter_num[0] + accel_fliter_1[2] * fliter_num[1] + INS_accel[2] * fliter_num[2];
-
-
-        AHRS_update(INS_quat, timing_time, INS_gyro, accel_fliter_3, INS_mag);
-        get_angle(INS_quat, INS_angle + INS_YAW_ADDRESS_OFFSET, INS_angle + INS_PITCH_ADDRESS_OFFSET, INS_angle + INS_ROLL_ADDRESS_OFFSET);
-
-
-        // 当前不启用 IST8310 的实时更新路径，这里保留流程接口。
-        if(mag_update_flag &= 1 << IMU_DR_SHFITS)
+        if ((gyro_updated != 0U) || (accel_updated != 0U))
         {
-            mag_update_flag &= ~(1<< IMU_DR_SHFITS);
-            mag_update_flag |= (1 << IMU_SPI_SHFITS);
+            accel_fliter_1[0] = accel_fliter_2[0];
+            accel_fliter_2[0] = accel_fliter_3[0];
+
+            accel_fliter_3[0] = accel_fliter_2[0] * fliter_num[0] + accel_fliter_1[0] * fliter_num[1] + INS_accel[0] * fliter_num[2];
+
+            accel_fliter_1[1] = accel_fliter_2[1];
+            accel_fliter_2[1] = accel_fliter_3[1];
+
+            accel_fliter_3[1] = accel_fliter_2[1] * fliter_num[0] + accel_fliter_1[1] * fliter_num[1] + INS_accel[1] * fliter_num[2];
+
+            accel_fliter_1[2] = accel_fliter_2[2];
+            accel_fliter_2[2] = accel_fliter_3[2];
+
+            accel_fliter_3[2] = accel_fliter_2[2] * fliter_num[0] + accel_fliter_1[2] * fliter_num[1] + INS_accel[2] * fliter_num[2];
+        }
+
+        if ((gyro_updated != 0U) || (mag_updated != 0U))
+        {
+            /*
+             * AHRS is updated only after new gyro data or a valid magnetometer
+             * sample arrives. The Euler angle output is refreshed only when the
+             * AHRS library confirms that the quaternion update succeeded.
+             */
+            if (AHRS_update(INS_quat, timing_time, INS_gyro, accel_fliter_3, INS_mag) != 0)
+            {
+                get_angle(INS_quat,
+                          INS_angle + INS_YAW_ADDRESS_OFFSET,
+                          INS_angle + INS_PITCH_ADDRESS_OFFSET,
+                          INS_angle + INS_ROLL_ADDRESS_OFFSET);
+            }
         }
 
     }
 }
 
+
+/**
+  * @brief  若 IST8310 有新数据则读取并更新缓存
+  *
+  * @retval 1 已接收一组有效磁力计数据；0 没有新数据或数据无效。
+  *
+  * @note   这里只负责“读取和校验”，不直接触发姿态解算，避免把
+  *         标志位判断和 AHRS 运算混在一起。
+  */
+static uint8_t imu_update_mag_if_ready(void)
+{
+    fp32 mag[3] = {0.0f, 0.0f, 0.0f};
+
+    if ((mag_update_flag & (1 << IMU_DR_SHFITS)) == 0U)
+    {
+        return 0U;
+    }
+
+    mag_update_flag &= ~(1 << IMU_DR_SHFITS);
+
+    ist8310_read_mag(mag);
+    if (imu_mag_is_valid(mag) == 0U)
+    {
+        ist8310_real_data.status &= ~(1 << IST8310_DATA_READY_BIT);
+        return 0U;
+    }
+
+    ist8310_real_data.mag[0] = mag[0];
+    ist8310_real_data.mag[1] = mag[1];
+    ist8310_real_data.mag[2] = mag[2];
+    ist8310_real_data.status |= 1 << IST8310_DATA_READY_BIT;
+
+    return 1U;
+}
+
+/**
+  * @brief  检查磁场模长是否在常见地磁范围附近
+  *
+  * @note   这不是精确标定，只用于挡掉全 0、通信异常值或明显饱和值。
+  */
+static uint8_t imu_mag_is_valid(const fp32 mag[3])
+{
+    fp32 norm2 = 0.0f;
+
+    if (mag == NULL)
+    {
+        return 0U;
+    }
+
+    norm2 = mag[0] * mag[0] + mag[1] * mag[1] + mag[2] * mag[2];
+
+    if (norm2 < INS_MAG_MIN_VALID_NORM2)
+    {
+        return 0U;
+    }
+
+    if (norm2 > INS_MAG_MAX_VALID_NORM2)
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
 
 
 

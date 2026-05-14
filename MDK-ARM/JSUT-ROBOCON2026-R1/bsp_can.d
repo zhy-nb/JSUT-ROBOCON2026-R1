@@ -1,6 +1,6 @@
 jsut-robocon2026-r1\bsp_can.o: ..\bsp\boards\bsp_can.c
 jsut-robocon2026-r1\bsp_can.o: ..\bsp\boards\bsp_can.h
-jsut-robocon2026-r1\bsp_can.o: ../application/struct_typedef.h
+jsut-robocon2026-r1\bsp_can.o: ../Inc/can.h
 jsut-robocon2026-r1\bsp_can.o: ../Inc/main.h
 jsut-robocon2026-r1\bsp_can.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h
 jsut-robocon2026-r1\bsp_can.o: ../Inc/stm32f4xx_hal_conf.h

@@ -54,3 +54,5 @@ jsut-robocon2026-r1\can_receive.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx
 jsut-robocon2026-r1\can_receive.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 jsut-robocon2026-r1\can_receive.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
 jsut-robocon2026-r1\can_receive.o: ..\application\detect_task.h
+jsut-robocon2026-r1\can_receive.o: ../bsp/boards/bsp_can.h
+jsut-robocon2026-r1\can_receive.o: ../Inc/can.h

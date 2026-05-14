@@ -154,6 +154,23 @@
 #define CHASSIS_BATTERY_COMPENSATION_MIN_SCALE 0.90f
 #define CHASSIS_BATTERY_COMPENSATION_MAX_SCALE 1.15f
 
+/* ----------------------- Battery-Side Power Management -------------------
+ * - Voltage compensation keeps feel close around 24 V ±0.3 V.
+ * - Low-voltage derating protects the battery and keeps the chassis controllable.
+ * - Current/power limits use real battery current if a sensor is connected;
+ *   otherwise they use the power_monitor estimated battery current.
+ * - These values are safe starting points, not final calibration constants.
+ *   Re-tune them after measuring real battery voltage sag and current.
+ */
+#define CHASSIS_LOW_VOLTAGE_DERATE_START 22.2f
+#define CHASSIS_LOW_VOLTAGE_DERATE_END 19.2f
+#define CHASSIS_LOW_VOLTAGE_MIN_SCALE 0.40f
+#define CHASSIS_BATTERY_CURRENT_LIMIT_A 22.0f
+#define CHASSIS_BATTERY_PEAK_CURRENT_LIMIT_A 32.0f
+#define CHASSIS_POWER_CONTINUOUS_LIMIT_W 420.0f
+#define CHASSIS_POWER_PEAK_LIMIT_W 650.0f
+#define CHASSIS_POWER_LIMIT_MIN_SCALE 0.35f
+
 /**
   * @brief  Chassis vector control modes used by the control loop.
   */

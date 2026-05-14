@@ -39,11 +39,37 @@ typedef struct
     int16_t last_ecd;
 } motor_measure_t;
 
+/**
+  * @brief  CAN 发送健康状态统计
+  *
+  * @note   这些计数用于调试总线可靠性：邮箱满、bus-off、error passive
+  *         等问题不会直接打断控制流程，但会被记录并触发发送层恢复。
+  *         `last_hal_error` 和 `last_esr` 直接对应 HAL 错误码与 CAN ESR
+  *         寄存器，现场排查线束、终端电阻和总线干扰时优先看这里。
+  */
+typedef struct
+{
+    uint32_t tx_request_count;       // 发送请求总次数
+    uint32_t tx_success_count;       // 成功压入 CAN 发送邮箱次数
+    uint32_t tx_fail_count;          // 最终发送失败次数
+    uint32_t tx_mailbox_full_count;  // 三个发送邮箱全满次数
+    uint32_t tx_recover_count;       // 触发 CAN 恢复次数
+    uint32_t tx_bus_off_count;       // bus-off 状态累计次数
+    uint32_t tx_error_passive_count; // error passive 状态累计次数
+    uint32_t tx_error_warning_count; // error warning 状态累计次数
+    uint32_t last_hal_error;         // 最近一次 HAL_CAN_GetError() 结果
+    uint32_t last_esr;               // 最近一次 CAN->ESR 寄存器快照
+    uint32_t last_std_id;            // 最近一次尝试发送的标准帧 ID
+    uint32_t last_recover_tick;      // 最近一次恢复时间戳，单位 ms
+    uint8_t last_recover_result;     // 最近一次 can_recover() 结果
+} can_tx_status_t;
+
 extern void CAN_cmd_gimbal(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev);
 extern void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, int16_t rev);
 extern void CAN_cmd_motor207_can1(int16_t current);
 extern void CAN_cmd_chassis_reset_ID(void);
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+extern const can_tx_status_t *CAN_get_tx_status(uint8_t can_index);
 
 extern const motor_measure_t *get_yaw_gimbal_motor_measure_point(void);
 extern const motor_measure_t *get_pitch_gimbal_motor_measure_point(void);
