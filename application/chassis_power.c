@@ -183,6 +183,18 @@ void chassis_power_apply_total_current_limit(chassis_move_t *chassis_move_contro
         }
 
         chassis_power_apply_runtime_scale(chassis_move_control, runtime_scale);
+
+        if (runtime_scale < 0.999f)
+        {
+            /*
+             * If this cycle was derated, refresh again with the final command
+             * actually sent on CAN so OLED/debug data does not show only the
+             * pre-derating request.
+             */
+            command_current_sum_raw = chassis_power_get_command_abs_sum_raw(chassis_move_control);
+            power_monitor_update_estimated_load(feedback_current_sum_raw, command_current_sum_raw);
+        }
+
         power_monitor_set_limit_state(voltage_derate_scale,
                                       power_limit_scale,
                                       low_voltage_limited,

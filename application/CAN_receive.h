@@ -53,6 +53,7 @@ typedef struct
     uint32_t tx_success_count;       // 成功压入 CAN 发送邮箱次数
     uint32_t tx_fail_count;          // 最终发送失败次数
     uint32_t tx_mailbox_full_count;  // 三个发送邮箱全满次数
+    uint32_t tx_mailbox_abort_count; // 邮箱连续卡满后主动清理次数
     uint32_t tx_recover_count;       // 触发 CAN 恢复次数
     uint32_t tx_bus_off_count;       // bus-off 状态累计次数
     uint32_t tx_error_passive_count; // error passive 状态累计次数
@@ -61,6 +62,8 @@ typedef struct
     uint32_t last_esr;               // 最近一次 CAN->ESR 寄存器快照
     uint32_t last_std_id;            // 最近一次尝试发送的标准帧 ID
     uint32_t last_recover_tick;      // 最近一次恢复时间戳，单位 ms
+    uint32_t last_mailbox_full_tick; // 最近一次邮箱满时间戳，单位 ms
+    uint16_t tx_mailbox_full_streak; // 邮箱连续满次数
     uint8_t last_recover_result;     // 最近一次 can_recover() 结果
 } can_tx_status_t;
 

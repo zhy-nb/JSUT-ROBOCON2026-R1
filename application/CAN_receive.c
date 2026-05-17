@@ -51,11 +51,16 @@ static uint8_t chassis_can_send_data[8];
  *   Minimum interval between two bus recoveries. This avoids repeatedly
  *   restarting CAN while the physical bus is still shorted or disconnected.
  * CAN_TX_RETRY_MAX:
- *   One normal attempt plus one retry after mailbox cleanup/recovery.
+ *   One normal attempt plus one retry after recovery.
+ * CAN_TX_MAILBOX_STUCK_*:
+ *   Short mailbox-full events are treated as a busy bus and the current
+ *   periodic command is dropped. Only sustained full mailboxes are cleared.
  */
 #define CAN_TX_MAILBOX_ALL             (CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2)
 #define CAN_TX_RECOVER_GAP_MS          20U
 #define CAN_TX_RETRY_MAX               2U
+#define CAN_TX_MAILBOX_STUCK_MS        8U
+#define CAN_TX_MAILBOX_STUCK_COUNT     4U
 
 /**
   * @brief  CAN1/CAN2 transmit health counters.
@@ -190,6 +195,53 @@ static uint8_t CAN_try_recover(CAN_HandleTypeDef *hcan, can_tx_status_t *status)
 }
 
 /**
+  * @brief  Handle all Tx mailboxes busy.
+  *
+  * @note   A short mailbox-full event usually means the bus is busy. Dropping
+  *         this periodic command is safer than aborting unrelated pending
+  *         frames. If the mailboxes stay full for several cycles, pending
+  *         frames are treated as stale and cleared once.
+  */
+static uint8_t CAN_handle_mailbox_full(CAN_HandleTypeDef *hcan, can_tx_status_t *status)
+{
+    uint32_t now = 0U;
+
+    if ((hcan == NULL) || (status == NULL))
+    {
+        return 0U;
+    }
+
+    now = HAL_GetTick();
+    status->tx_mailbox_full_count++;
+    if (status->tx_mailbox_full_streak < 0xFFFFU)
+    {
+        status->tx_mailbox_full_streak++;
+    }
+
+    if (status->last_mailbox_full_tick == 0U)
+    {
+        status->last_mailbox_full_tick = now;
+    }
+
+    if (CAN_need_recover(hcan) != 0U)
+    {
+        return CAN_try_recover(hcan, status);
+    }
+
+    if (((now - status->last_mailbox_full_tick) >= CAN_TX_MAILBOX_STUCK_MS) ||
+        (status->tx_mailbox_full_streak >= CAN_TX_MAILBOX_STUCK_COUNT))
+    {
+        status->tx_mailbox_abort_count++;
+        status->last_mailbox_full_tick = now;
+        status->tx_mailbox_full_streak = 0U;
+        (void)HAL_CAN_AbortTxRequest(hcan, CAN_TX_MAILBOX_ALL);
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/**
   * @brief  带检查与恢复策略的 CAN 发送封装
   *
   * @note   邮箱满时丢弃旧的待发帧并重试。底盘电流帧是周期命令，
@@ -221,14 +273,18 @@ static uint8_t CAN_send_checked(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *tx
     {
         if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0U)
         {
-            status->tx_mailbox_full_count++;
-            (void)HAL_CAN_AbortTxRequest(hcan, CAN_TX_MAILBOX_ALL);
-            continue;
+            if (CAN_handle_mailbox_full(hcan, status) != 0U)
+            {
+                continue;
+            }
+            break;
         }
 
         if (HAL_CAN_AddTxMessage(hcan, tx_header, tx_data, &send_mail_box) == HAL_OK)
         {
             status->tx_success_count++;
+            status->last_mailbox_full_tick = 0U;
+            status->tx_mailbox_full_streak = 0U;
             return 1U;
         }
 

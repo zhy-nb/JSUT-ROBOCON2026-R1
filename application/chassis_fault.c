@@ -1012,6 +1012,8 @@ static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_mov
     fp32 vx_limit = 0.0f;
     fp32 vy_limit = 0.0f;
     fp32 wz_limit = 0.0f;
+    fp32 base_speed_limit = 0.0f;
+    uint8_t lost_motor_index = 0xFFU;
 
     if (chassis_move_control == NULL)
     {
@@ -1021,23 +1023,64 @@ static void chassis_fault_limit_single_motor_command(chassis_move_t *chassis_mov
     vx_limit = chassis_move_control->vx_max_speed * CHASSIS_SINGLE_MOTOR_LOST_TRANSLATION_SCALE;
     vy_limit = chassis_move_control->vy_max_speed * CHASSIS_SINGLE_MOTOR_LOST_TRANSLATION_SCALE;
     wz_limit = NORMAL_MAX_CHASSIS_WZ * CHASSIS_SINGLE_MOTOR_LOST_WZ_LIMIT_SCALE;
+    base_speed_limit = (chassis_move_control->vx_max_speed < chassis_move_control->vy_max_speed) ?
+                       chassis_move_control->vx_max_speed :
+                       chassis_move_control->vy_max_speed;
+    lost_motor_index = chassis_get_single_lost_motor_index();
 
-    if (fabsf(chassis_move_control->vx_set) > vx_limit && fabsf(chassis_move_control->vx_set) > 1e-6f)
+    if (lost_motor_index < 4U)
     {
-        translation_scale = vx_limit / fabsf(chassis_move_control->vx_set);
-    }
+        fp32 row[3] = {0.0f, 0.0f, 0.0f};
+        fp32 row_norm = 0.0f;
+        fp32 weak_axis = 0.0f;
+        fp32 strong_axis = 0.0f;
+        fp32 weak_limit = base_speed_limit * CHASSIS_SINGLE_MOTOR_LOST_WEAK_AXIS_SCALE;
+        fp32 strong_limit = base_speed_limit * CHASSIS_SINGLE_MOTOR_LOST_TRANSLATION_SCALE;
 
-    if (fabsf(chassis_move_control->vy_set) > vy_limit && fabsf(chassis_move_control->vy_set) > 1e-6f)
-    {
-        fp32 vy_scale = vy_limit / fabsf(chassis_move_control->vy_set);
-
-        if (vy_scale < translation_scale)
+        chassis_get_wheel_kinematic_row(lost_motor_index, row);
+        row_norm = sqrtf(row[0] * row[0] + row[1] * row[1]);
+        if (row_norm > 1e-6f)
         {
-            translation_scale = vy_scale;
+            /*
+             * Limit the translation component that would mainly rely on the
+             * lost wheel, while keeping more motion on the perpendicular axis.
+             * This gives three-wheel degraded driving instead of uniformly
+             * shrinking vx/vy.
+             */
+            weak_axis = (chassis_move_control->vx_set * row[0] +
+                         chassis_move_control->vy_set * row[1]) / row_norm;
+            strong_axis = (-chassis_move_control->vx_set * row[1] +
+                           chassis_move_control->vy_set * row[0]) / row_norm;
+
+            weak_axis = fp32_constrain(weak_axis, -weak_limit, weak_limit);
+            strong_axis = fp32_constrain(strong_axis, -strong_limit, strong_limit);
+
+            chassis_move_control->vx_set = (weak_axis * row[0] - strong_axis * row[1]) / row_norm;
+            chassis_move_control->vy_set = (weak_axis * row[1] + strong_axis * row[0]) / row_norm;
         }
     }
+    else
+    {
+        if (fabsf(chassis_move_control->vx_set) > vx_limit && fabsf(chassis_move_control->vx_set) > 1e-6f)
+        {
+            translation_scale = vx_limit / fabsf(chassis_move_control->vx_set);
+        }
 
-    chassis_move_control->vx_set *= translation_scale;
-    chassis_move_control->vy_set *= translation_scale;
+        if (fabsf(chassis_move_control->vy_set) > vy_limit && fabsf(chassis_move_control->vy_set) > 1e-6f)
+        {
+            fp32 vy_scale = vy_limit / fabsf(chassis_move_control->vy_set);
+
+            if (vy_scale < translation_scale)
+            {
+                translation_scale = vy_scale;
+            }
+        }
+
+        chassis_move_control->vx_set *= translation_scale;
+        chassis_move_control->vy_set *= translation_scale;
+    }
+
+    chassis_move_control->vx_set = fp32_constrain(chassis_move_control->vx_set, -vx_limit, vx_limit);
+    chassis_move_control->vy_set = fp32_constrain(chassis_move_control->vy_set, -vy_limit, vy_limit);
     chassis_move_control->wz_set = fp32_constrain(chassis_move_control->wz_set, -wz_limit, wz_limit);
 }

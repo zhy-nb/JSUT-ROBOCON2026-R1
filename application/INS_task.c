@@ -207,7 +207,6 @@ void INS_task(void const *pvParameters)
          */
         uint8_t gyro_updated = 0U;
         uint8_t accel_updated = 0U;
-        uint8_t mag_updated = 0U;
 
         // 等待本轮 SPI DMA 读取结束。
         while (ulTaskNotifyTake(pdTRUE, portMAX_DELAY) != pdPASS)
@@ -237,7 +236,7 @@ void INS_task(void const *pvParameters)
             imu_temp_control(bmi088_real_data.temp);
         }
 
-        mag_updated = imu_update_mag_if_ready();
+        (void)imu_update_mag_if_ready();
 
         // 对新一轮原始数据做安装方向旋转和零漂修正。
         imu_cali_slove(INS_gyro, INS_accel, INS_mag, &bmi088_real_data, &ist8310_real_data);
@@ -261,12 +260,13 @@ void INS_task(void const *pvParameters)
             accel_fliter_3[2] = accel_fliter_2[2] * fliter_num[0] + accel_fliter_1[2] * fliter_num[1] + INS_accel[2] * fliter_num[2];
         }
 
-        if ((gyro_updated != 0U) || (mag_updated != 0U))
+        if (gyro_updated != 0U)
         {
             /*
-             * AHRS is updated only after new gyro data or a valid magnetometer
-             * sample arrives. The Euler angle output is refreshed only when the
-             * AHRS library confirms that the quaternion update succeeded.
+             * AHRS uses the gyro DMA cycle as the only integration timebase.
+             * Magnetometer data is only refreshed into INS_mag and consumed on
+             * the next gyro update, avoiding an extra attitude step with stale
+             * gyro/accel data when only the magnetometer interrupt arrives.
              */
             if (AHRS_update(INS_quat, timing_time, INS_gyro, accel_fliter_3, INS_mag) != 0)
             {
