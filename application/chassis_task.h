@@ -25,7 +25,7 @@
 
 /* ----------------------- RC Sensitivity --------------------------------- */
 #define CHASSIS_VX_RC_SEN 0.006f
-#define CHASSIS_VY_RC_SEN 0.005f
+#define CHASSIS_VY_RC_SEN 0.006f
 #define CHASSIS_ANGLE_Z_RC_SEN 0.000002f
 #define CHASSIS_WZ_RC_SEN 0.01f
 
@@ -39,9 +39,10 @@
 #define CHASSIS_RC_DEADLINE 10
 
 /* ----------------------- RC Feel Parameters ------------------------------ */
-#define CHASSIS_RC_SLOW_SEN 0.80f
+#define CHASSIS_RC_SLOW_SEN 0.75f
 #define CHASSIS_RC_DEADLINE_LOCAL 25
 #define CHASSIS_RC_EXPO 0.30f
+#define CHASSIS_RC_VECTOR_LIMIT 1.0f
 
 #define CHASSIS_VX_ACC_UP 1.8f
 #define CHASSIS_VX_ACC_DOWN 2.5f
@@ -52,8 +53,8 @@
 #define CHASSIS_WZ_ACC_DOWN 16.0f
 
 /* ----------------------- Trajectory Planning ---------------------------- */
-#define CHASSIS_TRAJ_RESPONSE_GAIN 10.0f
-#define CHASSIS_TRAJ_TRANSLATION_JERK 18.0f
+#define CHASSIS_TRAJ_RESPONSE_GAIN 12.0f
+#define CHASSIS_TRAJ_TRANSLATION_JERK 24.0f
 #define CHASSIS_TRAJ_WZ_JERK 120.0f
 #define CHASSIS_TRAJ_DEGRADED_ACC_SCALE 0.55f
 #define CHASSIS_TRAJ_DEGRADED_JERK_SCALE 0.50f
@@ -103,8 +104,9 @@
 
 #define MAX_WHEEL_SPEED 4.0f
 #define NORMAL_MAX_CHASSIS_SPEED_X 2.0f
-#define NORMAL_MAX_CHASSIS_SPEED_Y 1.5f
+#define NORMAL_MAX_CHASSIS_SPEED_Y 2.0f
 #define NORMAL_MAX_CHASSIS_WZ (660.0f * CHASSIS_WZ_RC_SEN)
+#define CHASSIS_TRANSLATION_VECTOR_LIMIT NORMAL_MAX_CHASSIS_SPEED_X
 
 /* Runtime degradation policy:
  * - RC lost: command target is reset to zero but the control loop stays alive.
@@ -117,13 +119,16 @@
 #define CHASSIS_SINGLE_MOTOR_LOST_WZ_LIMIT_SCALE 0.25f
 
 /* Mechanical abnormal detection:
- * - Detects wheel slip / hub looseness by comparing wheel-feedback motion
- *   with IMU response under high motor feedback current.
+ * - Detects wheel slip / hub looseness by comparing command/wheel-feedback
+ *   motion with IMU response. Hub looseness may have low current because the
+ *   motor can spin unloaded, so it must not depend only on high feedback current.
  * - It reuses the single-motor degraded speed limits after trigger.
  */
 #define CHASSIS_MECH_CURRENT_HIGH_RAW 1800.0f
 #define CHASSIS_MECH_TRANSLATION_SPEED_MIN 0.35f
 #define CHASSIS_MECH_TRANSLATION_ACCEL_MIN 0.70f
+#define CHASSIS_MECH_COMMAND_SPEED_MIN 0.45f
+#define CHASSIS_MECH_COMMAND_ACCEL_MIN 0.80f
 #define CHASSIS_MECH_IMU_ACCEL_MIN 0.30f
 #define CHASSIS_MECH_WZ_SPEED_MIN 0.70f
 #define CHASSIS_MECH_GYRO_MISMATCH_MIN 0.45f

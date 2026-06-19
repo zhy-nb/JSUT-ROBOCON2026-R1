@@ -39,12 +39,14 @@ static fp32 chassis_traj_abs_average_current(const chassis_move_t *chassis_move)
 static fp32 chassis_traj_average_speed_error(const chassis_move_t *chassis_move);
 static void chassis_traj_update_load(const chassis_move_t *chassis_move);
 static uint8_t chassis_traj_is_degraded(void);
+static void chassis_traj_decay_translation_to_zero(fp32 decel, fp32 snap);
 static void chassis_traj_update_axis(chassis_traj_axis_t *axis,
                                      fp32 target,
                                      fp32 acc_up,
                                      fp32 acc_down,
                                      fp32 jerk,
-                                     fp32 snap);
+                                     fp32 snap,
+                                     fp32 zero_dec);
 
 /**
   * @brief  Initialize planner state from current chassis feedback.
@@ -117,24 +119,35 @@ void chassis_trajectory_update(chassis_move_t *chassis_move_control,
                                 CHASSIS_TRAJ_MIN_SCALE,
                                 1.0f);
 
-    chassis_traj_update_axis(&chassis_traj.vx,
-                             raw_vx,
-                             CHASSIS_VX_ACC_UP * acc_scale,
-                             CHASSIS_VX_ACC_DOWN * acc_scale,
-                             CHASSIS_TRAJ_TRANSLATION_JERK * jerk_scale,
-                             CHASSIS_CMD_ZERO_SNAP);
-    chassis_traj_update_axis(&chassis_traj.vy,
-                             raw_vy,
-                             CHASSIS_VY_ACC_UP * acc_scale,
-                             CHASSIS_VY_ACC_DOWN * acc_scale,
-                             CHASSIS_TRAJ_TRANSLATION_JERK * jerk_scale,
-                             CHASSIS_CMD_ZERO_SNAP);
+    if (fabsf(raw_vx) < CHASSIS_CMD_ZERO_SNAP && fabsf(raw_vy) < CHASSIS_CMD_ZERO_SNAP)
+    {
+        chassis_traj_decay_translation_to_zero(CHASSIS_TRANSLATION_ZERO_DEC,
+                                               CHASSIS_CMD_ZERO_SNAP);
+    }
+    else
+    {
+        chassis_traj_update_axis(&chassis_traj.vx,
+                                 raw_vx,
+                                 CHASSIS_VX_ACC_UP * acc_scale,
+                                 CHASSIS_VX_ACC_DOWN * acc_scale,
+                                 CHASSIS_TRAJ_TRANSLATION_JERK * jerk_scale,
+                                 CHASSIS_CMD_ZERO_SNAP,
+                                 CHASSIS_VX_ZERO_DEC);
+        chassis_traj_update_axis(&chassis_traj.vy,
+                                 raw_vy,
+                                 CHASSIS_VY_ACC_UP * acc_scale,
+                                 CHASSIS_VY_ACC_DOWN * acc_scale,
+                                 CHASSIS_TRAJ_TRANSLATION_JERK * jerk_scale,
+                                 CHASSIS_CMD_ZERO_SNAP,
+                                 CHASSIS_VY_ZERO_DEC);
+    }
     chassis_traj_update_axis(&chassis_traj.wz,
                              raw_wz,
                              CHASSIS_WZ_ACC_UP * acc_scale,
                              CHASSIS_WZ_ACC_DOWN * acc_scale,
                              CHASSIS_TRAJ_WZ_JERK * jerk_scale,
-                             CHASSIS_WZ_ZERO_SNAP);
+                             CHASSIS_WZ_ZERO_SNAP,
+                             CHASSIS_WZ_ZERO_DEC);
 
     chassis_move_control->vx_set = chassis_traj.vx.value;
     chassis_move_control->vy_set = chassis_traj.vy.value;
@@ -282,6 +295,49 @@ static uint8_t chassis_traj_is_degraded(void)
 }
 
 /**
+  * @brief  Decay vx/vy together at joystick release to avoid stop drift.
+  */
+static void chassis_traj_decay_translation_to_zero(fp32 decel, fp32 snap)
+{
+    fp32 speed = 0.0f;
+    fp32 next_speed = 0.0f;
+    fp32 scale = 0.0f;
+
+    if (decel <= 0.0f)
+    {
+        decel = CHASSIS_VX_ACC_DOWN;
+    }
+
+    speed = sqrtf(chassis_traj.vx.value * chassis_traj.vx.value +
+                  chassis_traj.vy.value * chassis_traj.vy.value);
+
+    if (speed < snap)
+    {
+        chassis_traj.vx.value = 0.0f;
+        chassis_traj.vy.value = 0.0f;
+        chassis_traj.vx.accel = 0.0f;
+        chassis_traj.vy.accel = 0.0f;
+        return;
+    }
+
+    next_speed = speed - decel * CHASSIS_CONTROL_TIME;
+    if (next_speed <= 0.0f || next_speed < snap)
+    {
+        chassis_traj.vx.value = 0.0f;
+        chassis_traj.vy.value = 0.0f;
+        chassis_traj.vx.accel = 0.0f;
+        chassis_traj.vy.accel = 0.0f;
+        return;
+    }
+
+    scale = next_speed / speed;
+    chassis_traj.vx.value *= scale;
+    chassis_traj.vy.value *= scale;
+    chassis_traj.vx.accel = 0.0f;
+    chassis_traj.vy.accel = 0.0f;
+}
+
+/**
   * @brief  Update one axis using acceleration and jerk limits.
   * @brief  使用加速度和 jerk 限制更新单轴规划状态。
   */
@@ -290,7 +346,8 @@ static void chassis_traj_update_axis(chassis_traj_axis_t *axis,
                                      fp32 acc_up,
                                      fp32 acc_down,
                                      fp32 jerk,
-                                     fp32 snap)
+                                     fp32 snap,
+                                     fp32 zero_dec)
 {
     fp32 error = 0.0f;
     fp32 desired_accel = 0.0f;
@@ -303,15 +360,22 @@ static void chassis_traj_update_axis(chassis_traj_axis_t *axis,
     }
 
     error = target - axis->value;
-    desired_accel = error * CHASSIS_TRAJ_RESPONSE_GAIN;
-
-    if (desired_accel >= 0.0f)
+    if (fabsf(target) < snap && fabsf(axis->value) > snap && zero_dec > 0.0f)
     {
-        desired_accel = chassis_traj_limit_abs(desired_accel, acc_up);
+        desired_accel = (axis->value > 0.0f) ? -zero_dec : zero_dec;
     }
     else
     {
-        desired_accel = chassis_traj_limit_abs(desired_accel, acc_down);
+        desired_accel = error * CHASSIS_TRAJ_RESPONSE_GAIN;
+
+        if (desired_accel >= 0.0f)
+        {
+            desired_accel = chassis_traj_limit_abs(desired_accel, acc_up);
+        }
+        else
+        {
+            desired_accel = chassis_traj_limit_abs(desired_accel, acc_down);
+        }
     }
 
     accel_delta = desired_accel - axis->accel;

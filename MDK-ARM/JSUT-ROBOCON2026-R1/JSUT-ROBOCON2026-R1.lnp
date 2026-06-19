@@ -33,6 +33,7 @@
 "jsut-robocon2026-r1\chassis_power.o"
 "jsut-robocon2026-r1\chassis_task.o"
 "jsut-robocon2026-r1\chassis_trajectory.o"
+"jsut-robocon2026-r1\lift_task.o"
 "jsut-robocon2026-r1\led_flow_task.o"
 "jsut-robocon2026-r1\oled_task.o"
 "jsut-robocon2026-r1\power_monitor.o"

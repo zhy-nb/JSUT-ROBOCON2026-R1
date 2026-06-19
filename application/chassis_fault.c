@@ -319,10 +319,10 @@ void chassis_mech_fault_reset(chassis_move_t *chassis_move_control)
   * @param[in,out] chassis_move_update Chassis runtime object.
   * @param[in,out] chassis_move_update 底盘运行状态结构体。
   *
-  * @note   A fault is suspected only when motor feedback current is high while
-  *         wheel-feedback motion and IMU response disagree for a continuous
-  *         number of control cycles. This is a conservative detector, not a
-  *         direct physical measurement of the wheel hub.
+  * @note   A fault is suspected when command/wheel-feedback motion and IMU
+  *         response disagree for a continuous number of control cycles. Hub
+  *         looseness can be a low-current unloaded spin, so the detector also
+  *         checks command acceleration instead of relying only on current.
   * @note   只有在电机反馈电流较高，同时轮速反馈运动和 IMU 响应连续不匹配时，
   *         才会判定疑似机械异常。这是保守检测，不是对法兰或轮子的直接测量。
   */
@@ -330,8 +330,12 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
 {
     static fp32 last_vx = 0.0f;
     static fp32 last_vy = 0.0f;
+    static fp32 last_vx_set = 0.0f;
+    static fp32 last_vy_set = 0.0f;
     const fp32 *gyro = get_gyro_data_point();
     const fp32 *accel = get_accel_data_point();
+    fp32 command_translation_speed = 0.0f;
+    fp32 command_translation_accel = 0.0f;
     fp32 translation_speed = 0.0f;
     fp32 wheel_translation_accel = 0.0f;
     fp32 imu_horizontal_accel = 0.0f;
@@ -340,7 +344,10 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
     fp32 current_avg_abs = 0.0f;
     fp32 dvx = 0.0f;
     fp32 dvy = 0.0f;
+    fp32 cmd_dvx = 0.0f;
+    fp32 cmd_dvy = 0.0f;
     uint8_t translation_response_low = 0U;
+    uint8_t command_response_low = 0U;
     uint8_t yaw_response_low = 0U;
     uint8_t mismatch = 0U;
     chassis_mech_fault_e fault_type = CHASSIS_MECH_FAULT_NONE;
@@ -355,13 +362,20 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
         chassis_mech_fault_reset(chassis_move_update);
         last_vx = chassis_move_update->vx;
         last_vy = chassis_move_update->vy;
+        last_vx_set = chassis_move_update->vx_set;
+        last_vy_set = chassis_move_update->vy_set;
         return;
     }
 
+    command_translation_speed = sqrtf(chassis_move_update->vx_set * chassis_move_update->vx_set +
+                                      chassis_move_update->vy_set * chassis_move_update->vy_set);
     translation_speed = sqrtf(chassis_move_update->vx * chassis_move_update->vx +
                               chassis_move_update->vy * chassis_move_update->vy);
     dvx = chassis_move_update->vx - last_vx;
     dvy = chassis_move_update->vy - last_vy;
+    cmd_dvx = chassis_move_update->vx_set - last_vx_set;
+    cmd_dvy = chassis_move_update->vy_set - last_vy_set;
+    command_translation_accel = sqrtf(cmd_dvx * cmd_dvx + cmd_dvy * cmd_dvy) * CHASSIS_CONTROL_FREQUENCE;
     wheel_translation_accel = sqrtf(dvx * dvx + dvy * dvy) * CHASSIS_CONTROL_FREQUENCE;
     imu_horizontal_accel = sqrtf(accel[INS_ACCEL_X_ADDRESS_OFFSET] * accel[INS_ACCEL_X_ADDRESS_OFFSET] +
                                  accel[INS_ACCEL_Y_ADDRESS_OFFSET] * accel[INS_ACCEL_Y_ADDRESS_OFFSET]);
@@ -379,9 +393,15 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
         mismatch = (uint8_t)(translation_response_low || yaw_response_low);
     }
 
+    command_response_low = (uint8_t)(command_translation_speed > CHASSIS_MECH_COMMAND_SPEED_MIN &&
+                                     command_translation_accel > CHASSIS_MECH_COMMAND_ACCEL_MIN &&
+                                     translation_speed > CHASSIS_MECH_TRANSLATION_SPEED_MIN &&
+                                     imu_horizontal_accel < CHASSIS_MECH_IMU_ACCEL_MIN);
+    mismatch = (uint8_t)(mismatch || command_response_low);
+
     if (mismatch != 0U)
     {
-        fault_type = (translation_response_low || gyro_z_abs < (wheel_wz_abs * 0.45f)) ?
+        fault_type = (command_response_low || translation_response_low || gyro_z_abs < (wheel_wz_abs * 0.45f)) ?
                      CHASSIS_MECH_FAULT_HUB_LOOSE : CHASSIS_MECH_FAULT_WHEEL_SLIP;
         chassis_move_update->mech_fault.clear_count = 0U;
         if (chassis_move_update->mech_fault.suspect_count < CHASSIS_MECH_DETECT_COUNT)
@@ -412,6 +432,8 @@ void chassis_mech_fault_update(chassis_move_t *chassis_move_update)
 
     last_vx = chassis_move_update->vx;
     last_vy = chassis_move_update->vy;
+    last_vx_set = chassis_move_update->vx_set;
+    last_vy_set = chassis_move_update->vy_set;
 }
 
 /**

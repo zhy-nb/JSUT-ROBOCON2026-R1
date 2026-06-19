@@ -16,6 +16,7 @@
 
 #define CHASSIS_CAN hcan1
 #define GIMBAL_CAN  hcan2
+#define LIFT_CAN    hcan2
 
 typedef enum
 {
@@ -29,6 +30,13 @@ typedef enum
     CAN_TRIGGER_MOTOR_ID = 0x207,
     CAN_GIMBAL_ALL_ID    = 0x1FF,
 } can_msg_id_e;
+
+/* C620 IDs 5~7 share 0x205~0x207 feedback IDs with the legacy gimbal
+ * naming, but are unambiguous because the lift motors are on dedicated CAN2.
+ */
+#define CAN_LIFT_MOTOR5_ID CAN_YAW_MOTOR_ID
+#define CAN_LIFT_MOTOR6_ID CAN_PIT_MOTOR_ID
+#define CAN_LIFT_MOTOR7_ID CAN_TRIGGER_MOTOR_ID
 
 typedef struct
 {
@@ -72,11 +80,13 @@ extern void CAN_cmd_gimbal_on_can1(int16_t yaw, int16_t pitch, int16_t shoot, in
 extern void CAN_cmd_motor207_can1(int16_t current);
 extern void CAN_cmd_chassis_reset_ID(void);
 extern void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t motor4);
+extern void CAN_cmd_lift(int16_t motor5, int16_t motor6, int16_t motor7);
 extern const can_tx_status_t *CAN_get_tx_status(uint8_t can_index);
 
 extern const motor_measure_t *get_yaw_gimbal_motor_measure_point(void);
 extern const motor_measure_t *get_pitch_gimbal_motor_measure_point(void);
 extern const motor_measure_t *get_trigger_motor_measure_point(void);
 extern const motor_measure_t *get_chassis_motor_measure_point(uint8_t i);
+extern const motor_measure_t *get_lift_motor_measure_point(uint8_t i);
 
 #endif

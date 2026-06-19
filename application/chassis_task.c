@@ -28,6 +28,8 @@
 
 static int16_t chassis_apply_deadband(int16_t input, int16_t deadband);
 static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo);
+static void chassis_limit_translation_norm(fp32 *vx_norm, fp32 *vy_norm, fp32 limit);
+static void chassis_limit_translation_speed(fp32 *vx_set, fp32 *vy_set, fp32 limit);
 
 static void chassis_init(chassis_move_t *chassis_move_init);
 static void chassis_set_mode(chassis_move_t *chassis_move_mode);
@@ -120,6 +122,7 @@ void chassis_rc_to_control_vector(fp32 *vx_set, fp32 *vy_set, chassis_move_t *ch
 
     vx_norm = chassis_rc_expo(vx_channel, CHASSIS_RC_DEADLINE_LOCAL, CHASSIS_RC_EXPO);
     vy_norm = chassis_rc_expo(vy_channel, CHASSIS_RC_DEADLINE_LOCAL, CHASSIS_RC_EXPO);
+    chassis_limit_translation_norm(&vx_norm, &vy_norm, CHASSIS_RC_VECTOR_LIMIT);
 
     vx_set_channel = (vx_norm * 660.0f) * CHASSIS_VX_RC_SEN * CHASSIS_RC_SLOW_SEN;
     vy_set_channel = (vy_norm * 660.0f) * (-CHASSIS_VY_RC_SEN) * CHASSIS_RC_SLOW_SEN;
@@ -346,6 +349,9 @@ static void chassis_set_control(chassis_move_t *chassis_move_control)
         raw_vy_set = fp32_constrain(vy_set,
                                     chassis_move_control->vy_min_speed,
                                     chassis_move_control->vy_max_speed);
+        chassis_limit_translation_speed(&raw_vx_set,
+                                        &raw_vy_set,
+                                        CHASSIS_TRANSLATION_VECTOR_LIMIT);
         chassis_trajectory_update(chassis_move_control, raw_vx_set, raw_vy_set, raw_wz_set);
     }
     else if (chassis_move_control->chassis_mode == CHASSIS_VECTOR_RAW)
@@ -413,4 +419,58 @@ static fp32 chassis_rc_expo(int16_t input, int16_t deadband, fp32 expo)
     output = (1.0f - expo_ratio) * normalized + expo_ratio * normalized * normalized * normalized;
 
     return fp32_constrain(output, -1.0f, 1.0f);
+}
+
+/**
+  * @brief  Limit normalized RC translation to avoid faster diagonal motion.
+  */
+static void chassis_limit_translation_norm(fp32 *vx_norm, fp32 *vy_norm, fp32 limit)
+{
+    fp32 vector_norm = 0.0f;
+    fp32 scale = 1.0f;
+
+    if (vx_norm == NULL || vy_norm == NULL)
+    {
+        return;
+    }
+
+    if (limit <= 0.0f)
+    {
+        return;
+    }
+
+    vector_norm = sqrtf((*vx_norm) * (*vx_norm) + (*vy_norm) * (*vy_norm));
+    if (vector_norm > limit && vector_norm > 1e-6f)
+    {
+        scale = limit / vector_norm;
+        *vx_norm *= scale;
+        *vy_norm *= scale;
+    }
+}
+
+/**
+  * @brief  Limit chassis translation vector while preserving direction.
+  */
+static void chassis_limit_translation_speed(fp32 *vx_set, fp32 *vy_set, fp32 limit)
+{
+    fp32 vector_speed = 0.0f;
+    fp32 scale = 1.0f;
+
+    if (vx_set == NULL || vy_set == NULL)
+    {
+        return;
+    }
+
+    if (limit <= 0.0f)
+    {
+        return;
+    }
+
+    vector_speed = sqrtf((*vx_set) * (*vx_set) + (*vy_set) * (*vy_set));
+    if (vector_speed > limit && vector_speed > 1e-6f)
+    {
+        scale = limit / vector_speed;
+        *vx_set *= scale;
+        *vy_set *= scale;
+    }
 }

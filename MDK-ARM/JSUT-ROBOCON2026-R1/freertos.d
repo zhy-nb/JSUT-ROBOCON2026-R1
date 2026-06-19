@@ -60,4 +60,5 @@ jsut-robocon2026-r1\freertos.o: ../bsp/boards/bsp_rc.h
 jsut-robocon2026-r1\freertos.o: ../components/algorithm/user_lib.h
 jsut-robocon2026-r1\freertos.o: ../application/detect_task.h
 jsut-robocon2026-r1\freertos.o: ../application/INS_task.h
+jsut-robocon2026-r1\freertos.o: ../application/lift_task.h
 jsut-robocon2026-r1\freertos.o: ../application/oled_task.h

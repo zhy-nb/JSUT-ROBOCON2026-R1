@@ -40,26 +40,27 @@ const RC_ctrl_t *get_remote_control_point(void)
     return &rc_ctrl;
 }
 
+/* DR16 DBUS layout: s[0] is the right switch and s[1] is the left switch. */
 uint8_t get_remote_switch_left(void)
 {
-    return (uint8_t)rc_ctrl.rc.s[0];
+    return (uint8_t)rc_ctrl.rc.s[1];
 }
 
 uint8_t get_remote_switch_right(void)
 {
-    return (uint8_t)rc_ctrl.rc.s[1];
+    return (uint8_t)rc_ctrl.rc.s[0];
 }
 
 void get_remote_switch_state(uint8_t *left, uint8_t *right)
 {
     if (left != NULL)
     {
-        *left = (uint8_t)rc_ctrl.rc.s[0];
+        *left = (uint8_t)rc_ctrl.rc.s[1];
     }
 
     if (right != NULL)
     {
-        *right = (uint8_t)rc_ctrl.rc.s[1];
+        *right = (uint8_t)rc_ctrl.rc.s[0];
     }
 }
 

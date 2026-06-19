@@ -35,6 +35,7 @@ extern CAN_HandleTypeDef hcan2;
   * @note   0~3 为底盘四个 3508，4~5 为 yaw/pitch 6020，6 为拨弹 2006。
   */
 static motor_measure_t motor_chassis[7];
+static motor_measure_t motor_lift[3];
 
 static CAN_TxHeaderTypeDef gimbal_tx_message;
 static uint8_t gimbal_can_send_data[8];
@@ -42,6 +43,8 @@ static CAN_TxHeaderTypeDef gimbal_can1_tx_message;
 static uint8_t gimbal_can1_send_data[8];
 static CAN_TxHeaderTypeDef chassis_tx_message;
 static uint8_t chassis_can_send_data[8];
+static CAN_TxHeaderTypeDef lift_tx_message;
+static uint8_t lift_can_send_data[8];
 
 /* ----------------------- CAN Tx Reliability -----------------------------
  * CAN_TX_MAILBOX_ALL:
@@ -342,7 +345,36 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     CAN_RxHeaderTypeDef rx_header;
     uint8_t rx_data[8];
 
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, rx_data);
+    if (hcan == NULL || HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, rx_data) != HAL_OK)
+    {
+        return;
+    }
+
+    if (hcan->Instance == CAN2)
+    {
+        if (rx_header.StdId == CAN_LIFT_MOTOR5_ID)
+        {
+            get_motor_measure(&motor_lift[0], rx_data);
+            detect_hook(LIFT_MOTOR5_TOE);
+        }
+        else if (rx_header.StdId == CAN_LIFT_MOTOR6_ID)
+        {
+            get_motor_measure(&motor_lift[1], rx_data);
+            detect_hook(LIFT_MOTOR6_TOE);
+        }
+        else if (rx_header.StdId == CAN_LIFT_MOTOR7_ID)
+        {
+            get_motor_measure(&motor_lift[2], rx_data);
+            detect_hook(LIFT_MOTOR7_TOE);
+        }
+
+        return;
+    }
+
+    if (hcan->Instance != CAN1)
+    {
+        return;
+    }
 
     switch (rx_header.StdId)
     {
@@ -478,6 +510,27 @@ void CAN_cmd_chassis(int16_t motor1, int16_t motor2, int16_t motor3, int16_t mot
 }
 
 /**
+  * @brief  Send C620 ID 5~7 current commands through dedicated CAN2.
+  */
+void CAN_cmd_lift(int16_t motor5, int16_t motor6, int16_t motor7)
+{
+    lift_tx_message.StdId = CAN_GIMBAL_ALL_ID;
+    lift_tx_message.IDE = CAN_ID_STD;
+    lift_tx_message.RTR = CAN_RTR_DATA;
+    lift_tx_message.DLC = 0x08;
+    lift_can_send_data[0] = motor5 >> 8;
+    lift_can_send_data[1] = motor5;
+    lift_can_send_data[2] = motor6 >> 8;
+    lift_can_send_data[3] = motor6;
+    lift_can_send_data[4] = motor7 >> 8;
+    lift_can_send_data[5] = motor7;
+    lift_can_send_data[6] = 0;
+    lift_can_send_data[7] = 0;
+
+    (void)CAN_send_checked(&LIFT_CAN, &lift_tx_message, lift_can_send_data);
+}
+
+/**
   * @brief  获取 yaw 6020 电机反馈数据指针
   */
 const motor_measure_t *get_yaw_gimbal_motor_measure_point(void)
@@ -509,4 +562,17 @@ const motor_measure_t *get_trigger_motor_measure_point(void)
 const motor_measure_t *get_chassis_motor_measure_point(uint8_t i)
 {
     return &motor_chassis[(i & 0x03)];
+}
+
+/**
+  * @brief  Get lift feedback, index 0~2 for C620 ID 5~7.
+  */
+const motor_measure_t *get_lift_motor_measure_point(uint8_t i)
+{
+    if (i >= 3U)
+    {
+        return NULL;
+    }
+
+    return &motor_lift[i];
 }

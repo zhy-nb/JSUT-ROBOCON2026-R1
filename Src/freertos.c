@@ -30,6 +30,7 @@
 #include "chassis_task.h"
 #include "detect_task.h"
 #include "INS_task.h"
+#include "lift_task.h"
 #include "oled_task.h"
 
 /* USER CODE END Includes */
@@ -46,6 +47,7 @@
 osThreadId chassisTaskHandle;
 osThreadId detect_handle;
 osThreadId imuTaskHandle;
+osThreadId liftTaskHandle;
 osThreadId oledTaskHandle;
 /* USER CODE END PTD */
 
@@ -142,6 +144,10 @@ void MX_FREERTOS_Init(void) {
   // 搴曠洏涓绘帶鍒剁幆锛屽懆鏈?2 ms銆?
   osThreadDef(ChassisTask, chassis_task, osPriorityAboveNormal, 0, 512);
   chassisTaskHandle = osThreadCreate(osThread(ChassisTask), NULL);
+
+  // Independent CAN2 dual-3508 lead-screw lift control, period 2 ms.
+  osThreadDef(LiftTask, lift_task, osPriorityAboveNormal, 0, 256);
+  liftTaskHandle = osThreadCreate(osThread(LiftTask), NULL);
 
   // 澶圭埅鍔ㄤ綔涓庣數鏈?5/6 鐨勯『搴忔墽琛屾帶鍒躲€?
   // 鍙充晶鎷ㄦ潌鎺у埗 CAN1 涓?0x207 鐢垫満鐨勫崟鐢垫満浣嶇疆闂幆浠诲姟銆?  // 鍙充晶鎷ㄦ潌鎺у埗 CAN1 涓?0x207 鐢垫満鐨勫崟鐢垫満浣嶇疆闂幆浠诲姟銆?  // Right switch controls CAN1 motor 0x207 position.
